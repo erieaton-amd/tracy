@@ -740,7 +740,7 @@ Worker::Worker( FileRead& f, EventType::Type eventMask, bool bgTasks, bool allow
     {
         m_data.stringData.reserve_exact( sz, m_slab );
     }
-    
+
     for( uint64_t i=0; i<sz; i++ )
     {
         uint64_t ptr, ssz;
@@ -4601,6 +4601,9 @@ bool Worker::Process( const QueueItem& ev )
     case QueueType::GpuContextName:
         ProcessGpuContextName( ev.gpuContextName );
         break;
+    case QueueType::GpuZoneAnnotation:
+        ProcessGpuZoneAnnotation( ev.zoneAnnotation );
+        break;
     case QueueType::MemAlloc:
         ProcessMemAlloc( ev.memAlloc );
         break;
@@ -5737,6 +5740,7 @@ void Worker::ProcessGpuZoneBeginImplCommon( GpuEvent* zone, const QueueGpuZoneBe
     zone->SetGpuEnd( -1 );
     zone->callstack.SetVal( 0 );
     zone->SetChild( -1 );
+    zone->query_id = ev.queryId;
 
     uint64_t ztid;
     if( ctx->thread == 0 )
@@ -5960,7 +5964,7 @@ void Worker::ProcessGpuCalibration( const QueueGpuCalibration& ev )
     ctx->calibratedGpuTime = gpuTime;
     ctx->calibratedCpuTime = TscTime( ev.cpuTime );
 }
-    
+
 void Worker::ProcessGpuTimeSync( const QueueGpuTimeSync& ev )
 {
     auto ctx = m_gpuCtxMap[ev.context];
@@ -5990,6 +5994,22 @@ void Worker::ProcessGpuContextName( const QueueGpuContextName& ev )
     assert( ctx );
     const auto idx = GetSingleStringIdx();
     ctx->name = StringIdx( idx );
+}
+
+void Worker::ProcessGpuZoneAnnotation( const QueueGpuZoneAnnotation& ev )
+{
+    auto ctx = m_gpuCtxMap[ev.context];
+    assert( ctx );
+    // TODO: Get thread ID properly
+    // TODO: Search for the query from the back
+    assert( ctx->threadData.size() );
+    assert( ctx->threadData.begin()->second.timeline.size() );
+    auto & zone = ctx->threadData.begin()->second.timeline.back();
+    assert( zone->query_id == ev.queryId );
+    assert( zone->note_count < 10 );
+    zone->note_ids[zone->note_count] = ev.noteId;
+    zone->note_vals[zone->note_count] = ev.value;
+    zone->note_count++;
 }
 
 MemEvent* Worker::ProcessMemAllocImpl( MemData& memdata, const QueueMemAlloc& ev )
@@ -7724,6 +7744,10 @@ void Worker::ReadTimeline( FileRead& f, Vector<short_ptr<GpuEvent>>& _vec, uint6
         refGpuTime += tgpu;
         zone->SetCpuEnd( refTime );
         zone->SetGpuEnd( refGpuTime );
+        f.Read(zone->query_id);
+        f.Read(zone->note_count);
+        f.Read(zone->note_ids);
+        f.Read(zone->note_vals);
     }
     while( ++zone != end );
 }
@@ -8446,6 +8470,10 @@ void Worker::WriteTimelineImpl( FileWrite& f, const V& vec, int64_t& refTime, in
 
         WriteTimeOffset( f, refTime, v.CpuEnd() );
         WriteTimeOffset( f, refGpuTime, v.GpuEnd() );
+        f.Write( &v.query_id , sizeof(v.query_id) );
+        f.Write( &v.note_count , sizeof(v.note_count) );
+        f.Write( &v.note_ids , sizeof(v.note_ids) );
+        f.Write( &v.note_vals , sizeof(v.note_vals) );
     }
 }
 
