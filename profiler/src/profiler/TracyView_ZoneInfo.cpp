@@ -1574,7 +1574,12 @@ void View::DrawGpuInfoWindow()
 
         TextFocused( "Query ID:", RealToString(ev.query_id) );
         for (int i = 0; i < ev.note_count; i++ ) {
-          TextFocused( RealToString(ev.note_ids[i]), RealToString(ev.note_vals[i]) );
+          auto id = ev.note_ids[i];
+          if (ctx->notes.count(id)) {
+            TextFocused( m_worker.GetString( ctx->notes.at(id) ), RealToString(ev.note_vals[i]) );
+          } else {
+            TextFocused( RealToString(ev.note_ids[i]), RealToString(ev.note_vals[i]) );
+          }
         }
 
         ImGui::Separator();
@@ -2046,7 +2051,12 @@ void View::ZoneTooltip( const GpuEvent& ev )
 
     TextFocused( "Query ID:", RealToString(ev.query_id) );
     for (int i = 0; i < ev.note_count; i++ ) {
-      TextFocused( RealToString(ev.note_ids[i]), RealToString(ev.note_vals[i]) );
+      auto id = ev.note_ids[i];
+      if (ctx->notes.count(id)) {
+        TextFocused( m_worker.GetString( ctx->notes.at(id) ), RealToString(ev.note_vals[i]) );
+      } else {
+        TextFocused( RealToString(ev.note_ids[i]), RealToString(ev.note_vals[i]) );
+      }
     }
 
     ImGui::EndTooltip();
