@@ -1573,16 +1573,15 @@ void View::DrawGpuInfoWindow()
         }
 
         TextFocused( "Query ID:", RealToString( ev.query_id ) );
-        for( int i = 0; i < ev.note_count; i++ )
+        for( auto& p : ev.notes )
         {
-            auto id = ev.note_ids[i];
-            if( ctx->notes.count( id ) )
+            if( ctx->notes.count( p.first ) )
             {
-                TextFocused( m_worker.GetString( ctx->notes.at( id ) ), RealToString( ev.note_vals[i] ) );
+                TextFocused( m_worker.GetString( ctx->notes.at( p.first ) ), RealToString( p.second ) );
             }
             else
             {
-                TextFocused( RealToString( ev.note_ids[i] ), RealToString( ev.note_vals[i] ) );
+                TextFocused( RealToString( p.first ), RealToString( p.second ) );
             }
         }
 
@@ -2054,16 +2053,15 @@ void View::ZoneTooltip( const GpuEvent& ev )
     }
 
     TextFocused( "Query ID:", RealToString( ev.query_id ) );
-    for( int i = 0; i < ev.note_count; i++ )
+    for( auto& p : ev.notes )
     {
-        auto id = ev.note_ids[i];
-        if( ctx->notes.count( id ) )
+        if( ctx->notes.count( p.first ) )
         {
-            TextFocused( m_worker.GetString( ctx->notes.at( id ) ), RealToString( ev.note_vals[i] ) );
+            TextFocused( m_worker.GetString( ctx->notes.at( p.first ) ), RealToString( p.second ) );
         }
         else
         {
-            TextFocused( RealToString( ev.note_ids[i] ), RealToString( ev.note_vals[i] ) );
+            TextFocused( RealToString( p.first ), RealToString( p.second ) );
         }
     }
 
