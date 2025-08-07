@@ -60,12 +60,12 @@ void View::DrawThread( const TimelineContext& ctx, const ThreadData& thread, con
     const float cropperWidth = ImGui::CalcTextSize( ICON_FA_CARET_DOWN ).x;
     const float cropperCircleRadius = ( cropperWidth - 2.0f * GetScale() ) / 2.0f ;
     const float cropperAdditionalMargin = cropperWidth + wpos.x; // We add the left window margin for symmetry
-    
+
     // Display cropper if currently limited or if hovering the cropper area
     const auto threadDepthLimitIt = m_threadDepthLimit.find( thread.id );
     const bool croppingActive = ( threadDepthLimitIt != m_threadDepthLimit.end() && threadDepthLimitIt->second <= depth );
     const bool mouseInCropperDisplayZone = ImGui::GetMousePos().x >= 0 && ImGui::GetMousePos().x < wpos.x + cropperAdditionalMargin && ImGui::GetMousePos().y > ctx.yMin && ImGui::GetMousePos().y < ctx.yMax;
-    
+
     const bool displayCropper = croppingActive || mouseInCropperDisplayZone;
     if( displayCropper )
     {
@@ -77,7 +77,7 @@ void View::DrawThread( const TimelineContext& ctx, const ThreadData& thread, con
     if( !draw.empty() && yPos <= yMax && yPos + ostep * depth >= yMin )
     {
         // Only apply margin when croppingActive to avoid text moving around when mouse is getting close to the cropper widget
-        DrawZoneList( ctx, draw, offset, thread.id, depth, croppingActive ? cropperAdditionalMargin + GetScale() /* Ensure text has a bit of space for text */ : 0.f );
+        DrawZoneList( ctx, draw, offset, thread, depth, croppingActive ? cropperAdditionalMargin + GetScale() /* Ensure text has a bit of space for text */ : 0.f );
     }
     offset += ostep * depth;
 
@@ -87,9 +87,9 @@ void View::DrawThread( const TimelineContext& ctx, const ThreadData& thread, con
         assert( ctxSwitch );
         DrawContextSwitchList( ctx, ctxDraw, ctxSwitch->v, ctxOffset, offset, thread.isFiber );
     }
-    if( hasSamples && !samplesDraw.empty() )
+    if( thread.ctx->type == ZoneContext::CPU && hasSamples && !samplesDraw.empty() )
     {
-        DrawSampleList( ctx, samplesDraw, thread.samples, sampleOffset );
+        DrawSampleList( ctx, samplesDraw, static_cast<const CPUThreadData&>(thread).samples, sampleOffset );
     }
 
     if( m_vd.drawLocks )
@@ -206,11 +206,6 @@ void View::DrawThreadOverlays( const ThreadData& thread, const ImVec2& ul, const
         draw->AddRectFilled( ul, dr, 0x228888DD );
         draw->AddRect( ul, dr, 0x448888DD );
     }
-    if( m_gpuInfoWindow && m_gpuInfoWindowThread == thread.id )
-    {
-        draw->AddRectFilled( ul, dr, 0x2288DD88 );
-        draw->AddRect( ul, dr, 0x4488DD88 );
-    }
     if( m_cpuDataThread == thread.id )
     {
         draw->AddRectFilled( ul, dr, 0x2DFF8888 );
@@ -224,7 +219,7 @@ void View::DrawThreadOverlays( const ThreadData& thread, const ImVec2& ul, const
 }
 
 
-void View::DrawZoneList( const TimelineContext& ctx, const std::vector<TimelineDraw>& drawList, int _offset, uint64_t tid, int maxDepth, double margin )
+void View::DrawZoneList( const TimelineContext& ctx, const std::vector<TimelineDraw>& drawList, int _offset, const ThreadData& thread, int maxDepth, double margin )
 {
     auto draw = ImGui::GetWindowDrawList();
     const auto w = ctx.w;
@@ -237,7 +232,7 @@ void View::DrawZoneList( const TimelineContext& ctx, const std::vector<TimelineD
     const auto pxns = ctx.pxns;
     const auto hover = ctx.hover;
     const auto vStart = ctx.vStart;
-    
+
     const auto DrawZoneText = [&]( uint32_t color, const char* zoneName, ImVec2 tsz, double pr0, double pr1, double px0, double px1, double offset ){
         // pr0 and pr1 are the real locations of the zone start/end
         // px0 and px1 are the rendered locations of the zone (taking into account minsize and window clamping)
@@ -283,7 +278,7 @@ void View::DrawZoneList( const TimelineContext& ctx, const std::vector<TimelineD
         case TimelineDrawType::Folded:
         {
             auto& ev = *(const ZoneEvent*)v.ev.get();
-            const auto color = v.inheritedColor ? v.inheritedColor : ( m_vd.dynamicColors == 2 ? 0xFF666666 : GetThreadColor( tid, v.depth ) );
+            const auto color = v.inheritedColor ? v.inheritedColor : ( m_vd.dynamicColors == 2 ? 0xFF666666 : GetThreadColor( thread.id, v.depth ) );
             const auto rend = v.rend.Val();
             const auto px0 = ( ev.Start() - vStart ) * pxns;
             const auto px1 = ( rend - vStart ) * pxns;
@@ -307,7 +302,7 @@ void View::DrawZoneList( const TimelineContext& ctx, const std::vector<TimelineD
                 }
                 else
                 {
-                    ZoneTooltip( ev );
+                    ZoneTooltip( ev, thread );
 
                     if( IsMouseClicked( 2 ) && rend - ev.Start() > 0 )
                     {
@@ -348,7 +343,7 @@ void View::DrawZoneList( const TimelineContext& ctx, const std::vector<TimelineD
             const auto pr1 = ( end - vStart ) * pxns;
             const auto zsz = std::max( pr1 - pr0, pxns * 0.5 );
 
-            const auto zoneColor = GetZoneColorData( ev, tid, v.depth, v.inheritedColor );
+            const auto zoneColor = GetZoneColorData( ev, thread.id, v.depth, v.inheritedColor );
             const char* zoneName = m_worker.GetZoneName( ev );
 
             auto tsz = ImGui::CalcTextSize( zoneName );
@@ -381,7 +376,7 @@ void View::DrawZoneList( const TimelineContext& ctx, const std::vector<TimelineD
 
             if( hover && ImGui::IsMouseHoveringRect( wpos + ImVec2( px0, offset ), wpos + ImVec2( px1, offset + tsz.y + 1 ) ) )
             {
-                ZoneTooltip( ev );
+                ZoneTooltip( ev, thread );
                 if( IsMouseClickReleased( 1 ) ) m_setRangePopup = RangeSlim { ev.Start(), m_worker.GetZoneEnd( ev ), true };
 
                 if( !m_zoomAnim.active && IsMouseClicked( 2 ) )
@@ -410,7 +405,7 @@ void View::DrawZoneList( const TimelineContext& ctx, const std::vector<TimelineD
         case TimelineDrawType::GhostFolded:
         {
             auto& ev = *(const GhostZone*)v.ev.get();
-            const auto color = m_vd.dynamicColors == 2 ? 0xFF666666 : MixGhostColor( GetThreadColor( tid, v.depth ), 0x665555 );
+            const auto color = m_vd.dynamicColors == 2 ? 0xFF666666 : MixGhostColor( GetThreadColor( thread.id, v.depth ), 0x665555 );
             const auto rend = v.rend.Val();
             const auto px0 = ( ev.start.Val() - m_vd.zvStart ) * pxns;
             const auto px1 = ( rend - m_vd.zvStart ) * pxns;
@@ -456,7 +451,7 @@ void View::DrawZoneList( const TimelineContext& ctx, const std::vector<TimelineD
             }
             else
             {
-                color = MixGhostColor( GetThreadColor( tid, v.depth ), 0x665555 );
+                color = MixGhostColor( GetThreadColor( thread.id, v.depth ), 0x665555 );
             }
 
             const auto pr0 = ( ev.start.Val() - m_vd.zvStart ) * pxns;
@@ -485,10 +480,10 @@ void View::DrawZoneList( const TimelineContext& ctx, const std::vector<TimelineD
                     TextDisabledUnformatted( ICON_FA_GHOST " Ghost zone" );
                     ImGui::Separator();
                     TextFocused( "Unknown frame:", symName );
-                    TextFocused( "Thread:", m_worker.GetThreadName( tid ) );
+                    TextFocused( "Thread:", m_worker.GetThreadName( thread.id ) );
                     ImGui::SameLine();
-                    ImGui::TextDisabled( "(%s)", RealToString( tid ) );
-                    if( m_worker.IsThreadFiber( tid ) )
+                    ImGui::TextDisabled( "(%s)", RealToString( thread.id ) );
+                    if( m_worker.IsThreadFiber( thread.id ) )
                     {
                         ImGui::SameLine();
                         TextColoredUnformatted( ImVec4( 0.2f, 0.6f, 0.2f, 1.f ), "Fiber" );
@@ -570,10 +565,10 @@ void View::DrawZoneList( const TimelineContext& ctx, const std::vector<TimelineD
                     ImGui::TextUnformatted( LocationToString( file, line ) );
                     ImGui::SameLine();
                     ImGui::TextDisabled( "(0x%" PRIx64 ")", sym.symAddr );
-                    TextFocused( "Thread:", m_worker.GetThreadName( tid ) );
+                    TextFocused( "Thread:", m_worker.GetThreadName( thread.id ) );
                     ImGui::SameLine();
-                    ImGui::TextDisabled( "(%s)", RealToString( tid ) );
-                    if( m_worker.IsThreadFiber( tid ) )
+                    ImGui::TextDisabled( "(%s)", RealToString( thread.id ) );
+                    if( m_worker.IsThreadFiber( thread.id ) )
                     {
                         ImGui::SameLine();
                         TextColoredUnformatted( ImVec4( 0.2f, 0.6f, 0.2f, 1.f ), "Fiber" );
@@ -614,7 +609,7 @@ int View::DrawThreadCropper( const int depth, const uint64_t tid, const float xP
     if( !hasCtxSwitches && isCropped && depthLimit == 0 ) m_threadDepthLimit[tid] = 1;
 
     const float cropperCenterX = xPos + cropperWidth / 2.0;
-    
+
     const auto CircleCenterYForLine = [=]( int lane ){
         return yPos + ostep * ( lane + 0.5 );
     };
