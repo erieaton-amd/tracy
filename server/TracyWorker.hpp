@@ -134,16 +134,16 @@ public:
     };
     enum { ZoneThreadDataSize = sizeof( ZoneThreadData ) };
 
-    struct GpuZoneThreadData
-    {
-        tracy_force_inline GpuEvent* Zone() const { return (GpuEvent*)( _zone_thread >> 16 ); }
-        tracy_force_inline void SetZone( GpuEvent* zone ) { auto z64 = (uint64_t)zone; assert( ( z64 & 0xFFFF000000000000 ) == 0 ); memcpy( ((char*)&_zone_thread)+2, &z64, 4 ); memcpy( ((char*)&_zone_thread)+6, ((char*)&z64)+4, 2 ); }
-        tracy_force_inline uint16_t Thread() const { return uint16_t( _zone_thread & 0xFFFF ); }
-        tracy_force_inline void SetThread( uint16_t thread ) { memcpy( &_zone_thread, &thread, 2 ); }
+    // struct GpuZoneThreadData
+    // {
+    //     tracy_force_inline GpuEvent* Zone() const { return (GpuEvent*)( _zone_thread >> 16 ); }
+    //     tracy_force_inline void SetZone( GpuEvent* zone ) { auto z64 = (uint64_t)zone; assert( ( z64 & 0xFFFF000000000000 ) == 0 ); memcpy( ((char*)&_zone_thread)+2, &z64, 4 ); memcpy( ((char*)&_zone_thread)+6, ((char*)&z64)+4, 2 ); }
+    //     tracy_force_inline uint16_t Thread() const { return uint16_t( _zone_thread & 0xFFFF ); }
+    //     tracy_force_inline void SetThread( uint16_t thread ) { memcpy( &_zone_thread, &thread, 2 ); }
 
-        uint64_t _zone_thread;
-    };
-    enum { GpuZoneThreadDataSize = sizeof( GpuZoneThreadData ) };
+    //     uint64_t _zone_thread;
+    // };
+    // enum { GpuZoneThreadDataSize = sizeof( GpuZoneThreadData ) };
 
     struct CpuThreadTopology
     {
@@ -215,16 +215,16 @@ private:
         unordered_flat_map<uint16_t, uint64_t> threadCnt;
     };
 
-    struct GpuSourceLocationZones
-    {
-        struct GpuZtdSort { bool operator()( const GpuZoneThreadData& lhs, const GpuZoneThreadData& rhs ) const { return lhs.Zone()->GpuStart() < rhs.Zone()->GpuStart(); } };
+    // struct GpuSourceLocationZones
+    // {
+    //     struct GpuZtdSort { bool operator()( const GpuZoneThreadData& lhs, const GpuZoneThreadData& rhs ) const { return lhs.Zone()->GpuStart() < rhs.Zone()->GpuStart(); } };
 
-        SortedVector<GpuZoneThreadData, GpuZtdSort> zones;
-        int64_t min = std::numeric_limits<int64_t>::max();
-        int64_t max = std::numeric_limits<int64_t>::min();
-        int64_t total = 0;
-        double sumSq = 0;
-    };
+    //     SortedVector<GpuZoneThreadData, GpuZtdSort> zones;
+    //     int64_t min = std::numeric_limits<int64_t>::max();
+    //     int64_t max = std::numeric_limits<int64_t>::min();
+    //     int64_t total = 0;
+    //     double sumSq = 0;
+    // };
 
     struct CallstackFrameIdHash
     {
@@ -282,10 +282,9 @@ private:
         std::mutex lock;
         StringDiscovery<FrameData*> frames;
         FrameData* framesBase;
-        Vector<GpuCtxData*> gpuData;
+        Vector<ZoneContext*> contexts;
         Vector<short_ptr<MessageData>> messages;
         StringDiscovery<PlotData*> plots;
-        Vector<ThreadData*> threads;
         Vector<ZoneExtra> zoneExtra;
         MemData* memory;
         unordered_flat_map<uint64_t, MemData*> memNameMap;
@@ -313,8 +312,8 @@ private:
 #ifndef TRACY_NO_STATISTICS
         unordered_flat_map<int16_t, SourceLocationZones> sourceLocationZones;
         bool sourceLocationZonesReady = false;
-        unordered_flat_map<int16_t, GpuSourceLocationZones> gpuSourceLocationZones;
-        bool gpuSourceLocationZonesReady = false;
+      //unordered_flat_map<int16_t, GpuSourceLocationZones> gpuSourceLocationZones;
+      //bool gpuSourceLocationZonesReady = false;
 #else
         unordered_flat_map<int16_t, uint64_t> sourceLocationZonesCnt;
         unordered_flat_map<int16_t, uint64_t> gpuSourceLocationZonesCnt;
@@ -357,7 +356,7 @@ private:
         ThreadCompress externalThreadCompress;
 
         Vector<Vector<short_ptr<ZoneEvent>>> zoneChildren;
-        Vector<Vector<short_ptr<GpuEvent>>> gpuChildren;
+        Vector<Vector<short_ptr<ZoneEvent>>> gpuChildren;
 #ifndef TRACY_NO_STATISTICS
         Vector<Vector<GhostZone>> ghostChildren;
         Vector<GhostKey> ghostFrames;
@@ -384,7 +383,7 @@ private:
         std::pair<uint64_t, uint16_t> shrinkSrclocLast = std::make_pair( std::numeric_limits<uint64_t>::max(), 0 );
 #ifndef TRACY_NO_STATISTICS
         std::pair<uint16_t, SourceLocationZones*> srclocZonesLast = std::make_pair( 0, nullptr );
-        std::pair<uint16_t, GpuSourceLocationZones*> gpuZonesLast = std::make_pair( 0, nullptr );
+      //std::pair<uint16_t, GpuSourceLocationZones*> gpuZonesLast = std::make_pair( 0, nullptr );
 #else
         std::pair<uint16_t, uint64_t*> srclocCntLast = std::make_pair( 0, nullptr );
         std::pair<uint16_t, uint64_t*> gpuCntLast = std::make_pair( 0, nullptr );
@@ -561,9 +560,9 @@ public:
 
     const unordered_flat_map<uint32_t, LockMap*>& GetLockMap() const { return m_data.lockMap; }
     const Vector<short_ptr<MessageData>>& GetMessages() const { return m_data.messages; }
-    const Vector<GpuCtxData*>& GetGpuData() const { return m_data.gpuData; }
+    const Vector<ZoneContext*>& GetCtxData() const { return m_data.contexts; }
     const Vector<PlotData*>& GetPlots() const { return m_data.plots.Data(); }
-    const Vector<ThreadData*>& GetThreadData() const { return m_data.threads; }
+    const Vector<ThreadData*>& GetThreadData() const { assert(m_defaultCtx < UINT8_MAX); return m_ctxMap[m_defaultCtx]->threads; }
     const ThreadData* GetThreadData( uint64_t tid ) const;
     const MemData& GetMemoryNamed( uint64_t name ) const;
     const unordered_flat_map<uint64_t, MemData*>& GetMemNameMap() const { return m_data.memNameMap; }
@@ -600,9 +599,9 @@ public:
     //     before its children have ended).
     // GetZoneEndDirect() will only return zone's direct timing data, without looking at children.
     tracy_force_inline int64_t GetZoneEnd( const ZoneEvent& ev ) { return ev.IsEndValid() ? ev.End() : GetZoneEndImpl( ev ); }
-    tracy_force_inline int64_t GetZoneEnd( const GpuEvent& ev ) { return ev.GpuEnd() >= 0 ? ev.GpuEnd() : GetZoneEndImpl( ev ); }
+  //tracy_force_inline int64_t GetZoneEnd( const GpuEvent& ev ) { return ev.GpuEnd() >= 0 ? ev.GpuEnd() : GetZoneEndImpl( ev ); }
     static tracy_force_inline int64_t GetZoneEndDirect( const ZoneEvent& ev ) { return ev.IsEndValid() ? ev.End() : ev.Start(); }
-    static tracy_force_inline int64_t GetZoneEndDirect( const GpuEvent& ev ) { return ev.GpuEnd() >= 0 ? ev.GpuEnd() : ev.GpuStart(); }
+  //static tracy_force_inline int64_t GetZoneEndDirect( const GpuEvent& ev ) { return ev.GpuEnd() >= 0 ? ev.GpuEnd() : ev.GpuStart(); }
 
     uint32_t FindStringIdx( const char* str ) const;
     const char* GetString( uint64_t ptr ) const;
@@ -617,10 +616,9 @@ public:
     const char* GetZoneName( const SourceLocation& srcloc ) const;
     const char* GetZoneName( const ZoneEvent& ev ) const;
     const char* GetZoneName( const ZoneEvent& ev, const SourceLocation& srcloc ) const;
-    const char* GetZoneName( const GpuEvent& ev ) const;
 
     tracy_force_inline const Vector<short_ptr<ZoneEvent>>& GetZoneChildren( int32_t idx ) const { return m_data.zoneChildren[idx]; }
-    tracy_force_inline const Vector<short_ptr<GpuEvent>>& GetGpuChildren( int32_t idx ) const { return m_data.gpuChildren[idx]; }
+  //tracy_force_inline const Vector<short_ptr<GpuEvent>>& GetGpuChildren( int32_t idx ) const { return m_data.gpuChildren[idx]; }
 #ifndef TRACY_NO_STATISTICS
     tracy_force_inline const Vector<GhostZone>& GetGhostChildren( int32_t idx ) const { return m_data.ghostChildren[idx]; }
     tracy_force_inline const GhostKey& GetGhostFrame( const Int24& frame ) const { return m_data.ghostFrames[frame.Val()]; }
@@ -637,9 +635,9 @@ public:
     SourceLocationZones& GetZonesForSourceLocation( int16_t srcloc );
     const SourceLocationZones& GetZonesForSourceLocation( int16_t srcloc ) const;
     const unordered_flat_map<int16_t, SourceLocationZones>& GetSourceLocationZones() const { return m_data.sourceLocationZones; }
-    const unordered_flat_map<int16_t, GpuSourceLocationZones>& GetGpuSourceLocationZones() const { return m_data.gpuSourceLocationZones; }
+  //const unordered_flat_map<int16_t, GpuSourceLocationZones>& GetGpuSourceLocationZones() const { return m_data.gpuSourceLocationZones; }
     bool AreSourceLocationZonesReady() const { return m_data.sourceLocationZonesReady; }
-    bool AreGpuSourceLocationZonesReady() const { return m_data.gpuSourceLocationZonesReady; }
+  //bool AreGpuSourceLocationZonesReady() const { return m_data.gpuSourceLocationZonesReady; }
     bool IsCpuUsageReady() const { return m_data.ctxUsageReady; }
     const Vector<ContextSwitchUsage>& GetCpuUsage() const { return m_data.ctxUsage; }
 
@@ -758,6 +756,7 @@ private:
     tracy_force_inline void ProcessMessageColorCallstack( const QueueMessageColor& ev );
     tracy_force_inline void ProcessMessageLiteralColorCallstack( const QueueMessageColorLiteral& ev );
     tracy_force_inline void ProcessMessageAppInfo( const QueueMessage& ev );
+    tracy_force_inline void ProcessCpuNewContext();
     tracy_force_inline void ProcessGpuNewContext( const QueueGpuNewContext& ev );
     tracy_force_inline void ProcessGpuZoneBegin( const QueueGpuZoneBegin& ev, bool serial );
     tracy_force_inline void ProcessGpuZoneBeginCallstack( const QueueGpuZoneBegin& ev, bool serial );
@@ -810,16 +809,16 @@ private:
     tracy_force_inline ZoneEvent* AllocZoneEvent();
     tracy_force_inline void ProcessZoneBeginImpl( ZoneEvent* zone, const QueueZoneBegin& ev );
     tracy_force_inline void ProcessZoneBeginAllocSrcLocImpl( ZoneEvent* zone, const QueueZoneBeginLean& ev );
-    tracy_force_inline void ProcessGpuZoneBeginImpl( GpuEvent* zone, const QueueGpuZoneBegin& ev, bool serial );
-    tracy_force_inline void ProcessGpuZoneBeginAllocSrcLocImpl( GpuEvent* zone, const QueueGpuZoneBeginLean& ev, bool serial );
-    tracy_force_inline void ProcessGpuZoneBeginImplCommon( GpuEvent* zone, const QueueGpuZoneBeginLean& ev, bool serial );
+    tracy_force_inline void ProcessGpuZoneBeginImpl( ZoneEvent* zone, const QueueGpuZoneBegin& ev, bool serial );
+    tracy_force_inline void ProcessGpuZoneBeginAllocSrcLocImpl( ZoneEvent* zone, const QueueGpuZoneBeginLean& ev, bool serial );
+    tracy_force_inline void ProcessGpuZoneBeginImplCommon( ZoneEvent* zone, const QueueGpuZoneBeginLean& ev, bool serial );
     tracy_force_inline void ProcessPlotDataImpl( uint64_t name, int64_t evTime, double val );
     tracy_force_inline MemEvent* ProcessMemAllocImpl( MemData& memdata, const QueueMemAlloc& ev );
     tracy_force_inline MemEvent* ProcessMemFreeImpl( MemData& memdata, const QueueMemFree& ev );
-    tracy_force_inline void ProcessCallstackSampleImpl( const SampleData& sd, ThreadData& td );
-    tracy_force_inline void ProcessCallstackSampleInsertSample( const SampleData& sd, ThreadData& td );
+    tracy_force_inline void ProcessCallstackSampleImpl( const SampleData& sd, CPUThreadData& td );
+    tracy_force_inline void ProcessCallstackSampleInsertSample( const SampleData& sd, CPUThreadData& td );
 #ifndef TRACY_NO_STATISTICS
-    tracy_force_inline void ProcessCallstackSampleImplStats( const SampleData& sd, ThreadData& td );
+    tracy_force_inline void ProcessCallstackSampleImplStats( const SampleData& sd, CPUThreadData& td );
 #endif
 
     void ZoneStackFailure( uint64_t thread, const ZoneEvent* ev );
@@ -853,7 +852,7 @@ private:
     void InsertMessageData( MessageData* msg );
 
     ThreadData* NoticeThreadReal( uint64_t thread );
-    ThreadData* NewThread( uint64_t thread, bool fiber, int32_t groupHint );
+    CPUThreadData* NewThread( uint64_t thread, bool fiber, int32_t groupHint );
     tracy_force_inline ThreadData* NoticeThread( uint64_t thread )
     {
         if( m_data.threadDataLast.first == thread ) return m_data.threadDataLast.second;
@@ -876,12 +875,12 @@ private:
     }
     SourceLocationZones* GetSourceLocationZonesReal( uint16_t srcloc );
 
-    GpuSourceLocationZones* GetGpuSourceLocationZones( uint16_t srcloc )
-    {
-        if( m_data.gpuZonesLast.first == srcloc ) return m_data.gpuZonesLast.second;
-        return GetGpuSourceLocationZonesReal( srcloc );
-    }
-    GpuSourceLocationZones* GetGpuSourceLocationZonesReal( uint16_t srcloc );
+    // GpuSourceLocationZones* GetGpuSourceLocationZones( uint16_t srcloc )
+    // {
+    //     if( m_data.gpuZonesLast.first == srcloc ) return m_data.gpuZonesLast.second;
+    //     return GetGpuSourceLocationZonesReal( srcloc );
+    // }
+    // GpuSourceLocationZones* GetGpuSourceLocationZonesReal( uint16_t srcloc );
 #else
     uint64_t* GetSourceLocationZonesCnt( uint16_t srcloc )
     {
@@ -948,7 +947,7 @@ private:
     void CacheSourceFromFile( const char* fn );
 
     tracy_force_inline Vector<short_ptr<ZoneEvent>>& GetZoneChildrenMutable( int32_t idx ) { return m_data.zoneChildren[idx]; }
-    tracy_force_inline Vector<short_ptr<GpuEvent>>& GetGpuChildrenMutable( int32_t idx ) { return m_data.gpuChildren[idx]; }
+    tracy_force_inline Vector<short_ptr<ZoneEvent>>& GetGpuChildrenMutable( int32_t idx ) { return m_data.gpuChildren[idx]; }
 #ifndef TRACY_NO_STATISTICS
     tracy_force_inline Vector<GhostZone>& GetGhostChildrenMutable( int32_t idx ) { return m_data.ghostChildren[idx]; }
 #endif
@@ -964,12 +963,12 @@ private:
 
     tracy_force_inline int64_t ReadTimeline( FileRead& f, ZoneEvent* zone, int64_t refTime, int32_t& childIdx );
     tracy_force_inline int64_t ReadTimelineHaveSize( FileRead& f, ZoneEvent* zone, int64_t refTime, int32_t& childIdx, uint32_t sz );
-    tracy_force_inline void ReadTimeline( FileRead& f, GpuEvent* zone, int64_t& refTime, int64_t& refGpuTime, int32_t& childIdx, bool hasQueryId );
-    tracy_force_inline void ReadTimelineHaveSize( FileRead& f, GpuEvent* zone, int64_t& refTime, int64_t& refGpuTime, int32_t& childIdx, uint64_t sz, bool hasQueryId );
+  //tracy_force_inline void ReadTimeline( FileRead& f, GpuEvent* zone, int64_t& refTime, int64_t& refGpuTime, int32_t& childIdx, bool hasQueryId );
+  //tracy_force_inline void ReadTimelineHaveSize( FileRead& f, GpuEvent* zone, int64_t& refTime, int64_t& refGpuTime, int32_t& childIdx, uint64_t sz, bool hasQueryId );
 
 #ifndef TRACY_NO_STATISTICS
     tracy_force_inline void ReconstructZoneStatistics( uint8_t* countMap, ZoneEvent& zone, uint16_t thread );
-    tracy_force_inline void ReconstructZoneStatistics( GpuEvent& zone, uint16_t thread );
+  //tracy_force_inline void ReconstructZoneStatistics( GpuEvent& zone, uint16_t thread );
 #else
     tracy_force_inline void CountZoneStatistics( ZoneEvent* zone );
     tracy_force_inline void CountZoneStatistics( GpuEvent* zone );
@@ -980,15 +979,14 @@ private:
     tracy_force_inline ZoneExtra& RequestZoneExtra( ZoneEvent& ev );
 
     int64_t GetZoneEndImpl( const ZoneEvent& ev );
-    int64_t GetZoneEndImpl( const GpuEvent& ev );
 
     void UpdateMbps( int64_t td );
 
     int64_t ReadTimeline( FileRead& f, Vector<short_ptr<ZoneEvent>>& vec, uint32_t size, int64_t refTime, int32_t& childIdx );
-    void ReadTimeline( FileRead& f, Vector<short_ptr<GpuEvent>>& vec, uint64_t size, int64_t& refTime, int64_t& refGpuTime, int32_t& childIdx, bool hasQueryId );
+  //void ReadTimeline( FileRead& f, Vector<short_ptr<GpuEvent>>& vec, uint64_t size, int64_t& refTime, int64_t& refGpuTime, int32_t& childIdx, bool hasQueryId );
 
     tracy_force_inline void WriteTimeline( FileWrite& f, const Vector<short_ptr<ZoneEvent>>& vec, int64_t& refTime );
-    tracy_force_inline void WriteTimeline( FileWrite& f, const Vector<short_ptr<GpuEvent>>& vec, int64_t& refTime, int64_t& refGpuTime );
+  //tracy_force_inline void WriteTimeline( FileWrite& f, const Vector<short_ptr<GpuEvent>>& vec, int64_t& refTime, int64_t& refGpuTime );
     template<typename Adapter, typename V>
     void WriteTimelineImpl( FileWrite& f, const V& vec, int64_t& refTime );
     template<typename Adapter, typename V>
@@ -1035,12 +1033,14 @@ private:
     bool m_inconsistentSamples;
     bool m_allowStringModification = false;
 
-    short_ptr<GpuCtxData> m_gpuCtxMap[256];
+    short_ptr<ZoneContext> m_ctxMap[256];
     uint32_t m_pendingCallstackId = 0;
     int16_t m_pendingSourceLocationPayload = 0;
     Vector<uint64_t> m_sourceLocationQueue;
     unordered_flat_map<uint64_t, int16_t> m_sourceLocationShrink;
-    unordered_flat_map<uint64_t, ThreadData*> m_threadMap;
+    uint8_t m_defaultCtx { UINT8_MAX };
+  //Vector<ZoneContext *> m_contexts;
+    //unordered_flat_map<uint64_t, ThreadData*> m_threadMap;
     unordered_flat_map<uint32_t, FrameData*> m_vsyncFrameMap;
     FrameImagePending m_pendingFrameImageData = {};
     unordered_flat_map<uint64_t, SymbolPending> m_pendingSymbols;
@@ -1091,9 +1091,6 @@ private:
     size_t m_frameImageBufferSize = 0;
     TextureCompression m_texcomp;
 
-    uint64_t m_threadCtx = 0;
-    ThreadData* m_threadCtxData = nullptr;
-    int64_t m_refTimeThread = 0;
     int64_t m_refTimeSerial = 0;
     int64_t m_refTimeCtx = 0;
     int64_t m_refTimeGpu = 0;

@@ -321,6 +321,7 @@ void View::DrawStatistics()
     }
     else
     {
+      /*
         assert( m_statMode == 2 );
         if( !m_worker.AreGpuSourceLocationZonesReady() )
         {
@@ -456,6 +457,7 @@ void View::DrawStatistics()
         TextFocused( "Visible zones:", RealToString( srcloc.size() ) );
         ImGui::SameLine();
         copySrclocsToClipboard = ClipboardButton();
+      */
     }
 
     ImGui::Separator();

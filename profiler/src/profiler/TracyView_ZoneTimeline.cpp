@@ -69,9 +69,9 @@ void View::DrawThread( const TimelineContext& ctx, const ThreadData& thread, con
         assert( ctxSwitch );
         DrawContextSwitchList( ctx, ctxDraw, ctxSwitch->v, ctxOffset, offset, thread.isFiber );
     }
-    if( hasSamples && !samplesDraw.empty() )
+    if( thread.ctx->type == ZoneContext::CPU && hasSamples && !samplesDraw.empty() )
     {
-        DrawSampleList( ctx, samplesDraw, thread.samples, sampleOffset );
+        DrawSampleList( ctx, samplesDraw, static_cast<const CPUThreadData&>(thread).samples, sampleOffset );
     }
 
     if( m_vd.drawLocks )
@@ -186,11 +186,6 @@ void View::DrawThreadOverlays( const ThreadData& thread, const ImVec2& ul, const
     {
         draw->AddRectFilled( ul, dr, 0x228888DD );
         draw->AddRect( ul, dr, 0x448888DD );
-    }
-    if( m_gpuInfoWindow && m_gpuInfoWindowThread == thread.id )
-    {
-        draw->AddRectFilled( ul, dr, 0x2288DD88 );
-        draw->AddRect( ul, dr, 0x4488DD88 );
     }
     if( m_cpuDataThread == thread.id )
     {

@@ -360,9 +360,12 @@ void View::DrawTimeline()
 
     if( m_vd.drawGpuZones )
     {
-        for( auto& v : m_worker.GetGpuData() )
+        for( auto& v : m_worker.GetCtxData() )
         {
-            m_tc.AddItem<TimelineItemGpu>( v );
+            if( v->type == ZoneContext::GPU )
+            {
+                m_tc.AddItem<TimelineItemGpu>( static_cast<GpuCtxData*>( v ) );
+            }
         }
     }
     if( m_vd.drawCpuData && m_worker.HasContextSwitches() )
@@ -470,13 +473,6 @@ void View::DrawTimeline()
         const auto px1 = std::max( px0 + std::max( 1.0, pxns * 0.5 ), ( m_gpuEnd - m_vd.zvStart ) * pxns );
         draw->AddRectFilled( ImVec2( wpos.x + px0, linepos.y ), ImVec2( wpos.x + px1, linepos.y + lineh ), 0x228888DD );
         draw->AddRect( ImVec2( wpos.x + px0, linepos.y ), ImVec2( wpos.x + px1, linepos.y + lineh ), 0x448888DD );
-    }
-    if( m_gpuInfoWindow )
-    {
-        const auto px0 = ( m_gpuInfoWindow->CpuStart() - m_vd.zvStart ) * pxns;
-        const auto px1 = std::max( px0 + std::max( 1.0, pxns * 0.5 ), ( m_gpuInfoWindow->CpuEnd() - m_vd.zvStart ) * pxns );
-        draw->AddRectFilled( ImVec2( wpos.x + px0, linepos.y ), ImVec2( wpos.x + px1, linepos.y + lineh ), 0x2288DD88 );
-        draw->AddRect( ImVec2( wpos.x + px0, linepos.y ), ImVec2( wpos.x + px1, linepos.y + lineh ), 0x4488DD88 );
     }
 
     const auto scale = GetScale();
