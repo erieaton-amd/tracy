@@ -288,8 +288,7 @@ Worker::Worker( const char* addr, uint16_t port, int64_t memoryLimit )
     ProcessCpuNewContext();
 
 #ifndef TRACY_NO_STATISTICS
-    m_data.sourceLocationZonesReady = true;
-    //m_data.gpuSourceLocationZonesReady = true;
+    GetDefaultCtx().SetSourceLocationZonesReady();
     m_data.callstackSamplesReady = true;
     m_data.ghostZonesReady = true;
     m_data.ctxUsageReady = true;
@@ -341,6 +340,8 @@ Worker::Worker( const char* name, const char* program, const std::vector<ImportE
         }
     }
 
+    ProcessCpuNewContext();
+
     for( auto& v : timeline )
     {
         if( !v.isEnd )
@@ -363,14 +364,9 @@ Worker::Worker( const char* name, const char* program, const std::vector<ImportE
                 m_data.sourceLocationPayload.push_back( slptr );
                 key = -int16_t( idx + 1 );
 #ifndef TRACY_NO_STATISTICS
-                auto res = m_data.sourceLocationZones.emplace( key, SourceLocationZones() );
-                m_data.srclocZonesLast.first = key;
-                m_data.srclocZonesLast.second = &res.first->second;
-
+                GetDefaultCtx().InitSourceLocationZones(key);
 #else
-                auto res = m_data.sourceLocationZonesCnt.emplace( key, 0 );
-                m_data.srclocCntLast.first = key;
-                m_data.srclocCntLast.second = &res.first->second;
+                GetDefaultCtx().InitSourceLocationZonesCnt(key);
 #endif
             }
             else
@@ -389,10 +385,10 @@ Worker::Worker( const char* name, const char* program, const std::vector<ImportE
                 extra.text = StringIdx( StoreString( v.text.c_str(), v.text.size() ).idx );
             }
 
-            if( m_ctxMap[m_defaultCtx]->threadCtx != v.tid )
+            if( GetDefaultCtx().threadCtx != v.tid )
             {
-                m_ctxMap[m_defaultCtx]->threadCtx = v.tid;
-                m_ctxMap[m_defaultCtx]->threadCtxData = NoticeThread( v.tid );
+                GetDefaultCtx().threadCtx = v.tid;
+                GetDefaultCtx().threadCtxData = NoticeThread( v.tid );
             }
             NewZone( zone );
         }
@@ -407,10 +403,10 @@ Worker::Worker( const char* name, const char* program, const std::vector<ImportE
             zone->SetEnd( v.timestamp );
 
 #ifndef TRACY_NO_STATISTICS
-            ZoneThreadData ztd;
+            ZoneContext::ZoneThreadData ztd;
             ztd.SetZone( zone );
             ztd.SetThread( CompressThread( v.tid ) );
-            auto slz = GetSourceLocationZones( zone->SrcLoc() );
+            auto slz = GetDefaultCtx().GetSourceLocationZones( zone->SrcLoc() );
             slz->zones.push_back( ztd );
 #else
             CountZoneStatistics( zone );
@@ -451,10 +447,10 @@ Worker::Worker( const char* name, const char* program, const std::vector<ImportE
             msg->color = 0xFFFFFFFF;
             msg->callstack.SetVal( 0 );
 
-            if( m_ctxMap[m_defaultCtx]->threadCtx != v.tid )
+            if( GetDefaultCtx().threadCtx != v.tid )
             {
-                m_ctxMap[m_defaultCtx]->threadCtx = v.tid;
-                m_ctxMap[m_defaultCtx]->threadCtxData = nullptr;
+                GetDefaultCtx().threadCtx = v.tid;
+                GetDefaultCtx().threadCtxData = nullptr;
             }
             InsertMessageData( msg );
         }
@@ -499,8 +495,7 @@ Worker::Worker( const char* name, const char* program, const std::vector<ImportE
         m_data.plots.Data().push_back( plot );
     }
 
-    ProcessCpuNewContext();
-    auto &threadMap = m_ctxMap[m_defaultCtx]->threadData;
+    auto &threadMap = GetDefaultCtx().threadData;
     for( auto& t : threadMap )
     {
         auto name = threadNames.find(t.first);
@@ -850,46 +845,32 @@ Worker::Worker( FileRead& f, EventType::Type eventMask, bool bgTasks, bool allow
     }
 
 #ifndef TRACY_NO_STATISTICS
-    m_data.sourceLocationZones.reserve( sle + sz );
+    for( auto ctx : GetCtxData() )
+    {
+        ctx->sourceLocationZones.reserve( sle + sz );
 
-    f.Read( sz );
-    for( uint64_t i=0; i<sz; i++ )
-    {
-        int16_t id;
-        uint64_t cnt;
-        f.Read2( id, cnt );
-        auto status = m_data.sourceLocationZones.emplace( id, SourceLocationZones() );
-        assert( status.second );
-        status.first->second.zones.reserve( cnt );
+        f.Read( sz );
+        for( uint64_t i = 0; i < sz; i++ )
+        {
+            int16_t id;
+            uint64_t cnt;
+            f.Read2( id, cnt );
+            auto status = ctx->sourceLocationZones.emplace( id, ZoneContext::SourceLocationZones() );
+            assert( status.second );
+            status.first->second.zones.reserve( cnt );
+        }
     }
-    /*
-    f.Read( sz );
-    for( uint64_t i=0; i<sz; i++ )
-    {
-        int16_t id;
-        uint64_t cnt;
-        f.Read2( id, cnt );
-        auto status = m_data.gpuSourceLocationZones.emplace( id, GpuSourceLocationZones() );
-        assert( status.second );
-        status.first->second.zones.reserve( cnt );
-        }*/
 #else
-    f.Read( sz );
-    for( uint64_t i=0; i<sz; i++ )
+    for( auto ctx : GetCtxData() )
     {
-        int16_t id;
-        f.Read( id );
-        f.Skip( sizeof( uint64_t ) );
-        m_data.sourceLocationZonesCnt.emplace( id, 0 );
-    }
-
-    f.Read( sz );
-    for( uint64_t i=0; i<sz; i++ )
-    {
-        int16_t id;
-        f.Read( id );
-        f.Skip( sizeof( uint64_t ) );
-        m_data.gpuSourceLocationZonesCnt.emplace( id, 0 );
+        f.Read( sz );
+        for( uint64_t i = 0; i < sz; i++ )
+        {
+            int16_t id;
+            f.Read( id );
+            f.Skip( sizeof( uint64_t ) );
+            ctx->sourceLocationZonesCnt.emplace( id, 0 );
+        }
     }
 #endif
 
@@ -1004,15 +985,16 @@ Worker::Worker( FileRead& f, EventType::Type eventMask, bool bgTasks, bool allow
     s_loadProgress.subTotal.store( sz, std::memory_order_relaxed );
     s_loadProgress.subProgress.store( 0, std::memory_order_relaxed );
     f.Read( sz );
-    m_data.zoneChildren.reserve_exact( sz, m_slab );
-    memset( (char*)m_data.zoneChildren.data(), 0, sizeof( Vector<short_ptr<ZoneEvent>> ) * sz );
+    GetDefaultCtx().zoneChildren.reserve_exact( sz, m_slab );
+    memset( (char*)GetDefaultCtx().zoneChildren.data(), 0, sizeof( Vector<short_ptr<ZoneEvent>> ) * sz );
     int32_t childIdx = 0;
     f.Read( sz );
-    m_ctxMap[m_defaultCtx]->threadData.reserve(sz);
-    m_ctxMap[m_defaultCtx]->threads.reserve_exact( sz, m_slab );
+    GetDefaultCtx().threadData.reserve(sz);
+    GetDefaultCtx().threads.reserve_exact( sz, m_slab );
     for( uint64_t i=0; i<sz; i++ )
     {
         auto td = m_slab.AllocInit<CPUThreadData>();
+        td->ctx = &GetDefaultCtx();
         uint64_t tid;
         if( fileVer >= FileVersion( 0, 11, 1 ) )
         {
@@ -1029,7 +1011,7 @@ Worker::Worker( FileRead& f, EventType::Type eventMask, bool bgTasks, bool allow
         f.Read( tsz );
         if( tsz != 0 )
         {
-            ReadTimeline( f, td->timeline, tsz, 0, childIdx );
+            ReadTimeline( f, td->timeline, td->ctx, tsz, 0, childIdx );
         }
         uint64_t msz;
         f.Read( msz );
@@ -1092,23 +1074,25 @@ Worker::Worker( FileRead& f, EventType::Type eventMask, bool bgTasks, bool allow
                 f.Skip( ssz * ( 8 + 3 ) );
             }
         }
-        m_ctxMap[m_defaultCtx]->threads[i] = td;
-        m_ctxMap[0]->threadData.emplace( tid, td );
+        GetDefaultCtx().threads[i] = td;
+        GetDefaultCtx().threadData.emplace( tid, td );
     }
-    /*
+
     s_loadProgress.progress.store( LoadProgress::GpuZones, std::memory_order_relaxed );
     f.Read( sz );
     s_loadProgress.subTotal.store( sz, std::memory_order_relaxed );
     s_loadProgress.subProgress.store( 0, std::memory_order_relaxed );
     f.Read( sz );
-    m_data.gpuChildren.reserve_exact( sz, m_slab );
-    memset( (char*)m_data.gpuChildren.data(), 0, sizeof( Vector<short_ptr<GpuEvent>> ) * sz );
-    childIdx = 0;
-    f.Read( sz );
-    m_data.gpuData.reserve_exact( sz, m_slab );
+    m_data.contexts.reserve_exact( sz, m_slab );
     for( uint64_t i=0; i<sz; i++ )
     {
         auto ctx = m_slab.AllocInit<GpuCtxData>();
+
+        f.Read( sz );
+        ctx->zoneChildren.reserve_exact( sz, m_slab );
+        memset( (char*)ctx->zoneChildren.data(), 0, sizeof( Vector<short_ptr<ZoneEvent>> ) * sz );
+        childIdx = 0;
+
         uint8_t calibration;
         f.Read7( ctx->thread, calibration, ctx->count, ctx->period, ctx->type, ctx->name, ctx->overflow );
         uint64_t notesz;
@@ -1128,17 +1112,20 @@ Worker::Worker( FileRead& f, EventType::Type eventMask, bool bgTasks, bool allow
         m_data.gpuCnt += ctx->count;
         uint64_t tdsz;
         f.Read( tdsz );
+        ctx->threads.reserve_exact( tdsz, m_slab );
         for( uint64_t j=0; j<tdsz; j++ )
         {
             uint64_t tid, tsz;
             f.Read2( tid, tsz );
+            auto td = ctx->threadData.emplace( tid, m_slab.AllocInit<ThreadData>() ).first;
+            td->second->ctx = ctx;
             if( tsz != 0 )
             {
                 int64_t refTime = 0;
                 int64_t refGpuTime = 0;
-                auto td = ctx->threadData.emplace( tid, m_slab.AllocInit<ThreadData>() ).first;
-                ReadTimeline( f, td->second.timeline, tsz, refTime, refGpuTime, childIdx, fileVer >= FileVersion( 0, 12, 4 ) );
+                ReadTimeline( f, td->second->timeline, ctx, tsz, refTime, childIdx );
             }
+            ctx->threads[j] = td->second;
         }
 
         if( fileVer >= FileVersion( 0, 12, 4 ) )
@@ -1163,8 +1150,9 @@ Worker::Worker( FileRead& f, EventType::Type eventMask, bool bgTasks, bool allow
             }
         }
 
-        m_data.gpuData[i] = ctx;
-        }*/
+        m_data.contexts[i] = ctx;
+        m_ctxMap[i] = ctx;
+    }
 
     s_loadProgress.progress.store( LoadProgress::Plots, std::memory_order_relaxed );
     f.Read( sz );
@@ -1722,84 +1710,54 @@ Worker::Worker( FileRead& f, EventType::Type eventMask, bool bgTasks, bool allow
                 if( mem.second->reconstruct ) jobs.emplace_back( std::thread( [this, mem = mem.second] { ReconstructMemAllocPlot( *mem ); } ) );
             }
 
-            std::function<void(uint8_t*, Vector<short_ptr<ZoneEvent>>&, uint16_t)> ProcessTimeline;
-            ProcessTimeline = [this, &ProcessTimeline] ( uint8_t* countMap, Vector<short_ptr<ZoneEvent>>& _vec, uint16_t thread )
+            std::function<void(uint8_t*, Vector<short_ptr<ZoneEvent>>&, uint16_t, ZoneContext*)> ProcessTimeline;
+            ProcessTimeline = [this, &ProcessTimeline] ( uint8_t* countMap, Vector<short_ptr<ZoneEvent>>& _vec, uint16_t thread, ZoneContext* ctx )
             {
                 if( m_shutdown.load( std::memory_order_relaxed ) ) return;
                 assert( _vec.is_magic() );
                 auto& vec = *(Vector<ZoneEvent>*)( &_vec );
                 for( auto& zone : vec )
                 {
-                    if( zone.IsEndValid() ) ReconstructZoneStatistics( countMap, zone, thread );
+                    if( zone.IsEndValid() ) ReconstructZoneStatistics( countMap, zone, *ctx, thread );
                     if( zone.HasChildren() )
                     {
                         countMap[uint16_t(zone.SrcLoc())]++;
-                        ProcessTimeline( countMap, GetZoneChildrenMutable( zone.Child() ), thread );
+                        ProcessTimeline( countMap, ctx->GetZoneChildren( zone.Child() ), thread, ctx );
                         countMap[uint16_t(zone.SrcLoc())]--;
                     }
                 }
             };
 
             jobs.emplace_back( std::thread( [this, ProcessTimeline] {
-              for (auto ctx : m_data.contexts) {
-                for( auto p : ctx->threadData )
+                for( auto ctx : m_data.contexts )
                 {
-                  auto t = p.second;
-                    if( m_shutdown.load( std::memory_order_relaxed ) ) return;
-                    if( !t->timeline.empty() )
+                    for( auto p : ctx->threadData )
                     {
-                        uint8_t countMap[64*1024];
-                        // Don't touch thread compression cache in a thread.
-                        ProcessTimeline( countMap, t->timeline, m_data.localThreadCompress.DecompressMustRaw( t->id ) );
-                    }
-                }
-              }
-                std::lock_guard<std::mutex> lock( m_data.lock );
-                m_data.sourceLocationZonesReady = true;
-            } ) );
-
-            /*
-            std::function<void(Vector<short_ptr<GpuEvent>>&, uint16_t)> ProcessTimelineGpu;
-            ProcessTimelineGpu = [this, &ProcessTimelineGpu] ( Vector<short_ptr<GpuEvent>>& _vec, uint16_t thread )
-            {
-                if( m_shutdown.load( std::memory_order_relaxed ) ) return;
-                assert( _vec.is_magic() );
-                auto& vec = *(Vector<GpuEvent>*)( &_vec );
-                for( auto& zone : vec )
-                {
-                    if( zone.GpuEnd() >= 0 ) ReconstructZoneStatistics( zone, thread );
-                    if( zone.Child() >= 0 )
-                    {
-                        ProcessTimelineGpu( GetGpuChildrenMutable( zone.Child() ), thread );
-                    }
-                }
-            };
-
-            jobs.emplace_back( std::thread( [this, ProcessTimelineGpu] {
-                for( auto& t : m_data.gpuData )
-                {
-                    for( auto& td : t->threadData )
-                    {
+                        auto t = p.second;
                         if( m_shutdown.load( std::memory_order_relaxed ) ) return;
-                        if( !td.second.timeline.empty() )
+                        if( !t->timeline.empty() )
                         {
-                            ProcessTimelineGpu( td.second.timeline, td.first );
+                            uint8_t countMap[64 * 1024];
+                            // Don't touch thread compression cache in a thread.
+                            ProcessTimeline( countMap, t->timeline, m_data.localThreadCompress.DecompressMustRaw( t->id ), ctx );
                         }
                     }
+                    {
+                        std::lock_guard<std::mutex> lock( m_data.lock );
+                        ctx->SetSourceLocationZonesReady();
+                    }
                 }
-                std::lock_guard<std::mutex> lock( m_data.lock );
-                m_data.gpuSourceLocationZonesReady = true;
-                } ) );*/
+            } ) );
 
             if( eventMask & EventType::Samples )
             {
                 jobs.emplace_back( std::thread( [this] {
                     unordered_flat_map<uint32_t, uint32_t> counts;
                     uint32_t total = 0;
-                    for( auto& t : m_ctxMap[m_defaultCtx]->threads ) total += static_cast<CPUThreadData*>(t)->samples.size();
+                    for( auto& t : GetDefaultCtx().threads ) total += static_cast<CPUThreadData*>(t)->samples.size();
                     if( total != 0 )
                     {
-                        for( auto& td : m_ctxMap[m_defaultCtx]->threads )
+                        for( auto& td : GetDefaultCtx().threads )
                         {
                             auto t = static_cast<CPUThreadData*>(td);
                             if( m_shutdown.load( std::memory_order_relaxed ) ) return;
@@ -1861,7 +1819,7 @@ Worker::Worker( FileRead& f, EventType::Type eventMask, bool bgTasks, bool allow
 
                 jobs.emplace_back( std::thread( [this] {
                     uint32_t gcnt = 0;
-                    for( auto& td : m_ctxMap[m_defaultCtx]->threads )
+                    for( auto& td : GetDefaultCtx().threads )
                     {
                         auto t = static_cast<CPUThreadData*>(td);
                         if( m_shutdown.load( std::memory_order_relaxed ) ) return;
@@ -1890,7 +1848,7 @@ Worker::Worker( FileRead& f, EventType::Type eventMask, bool bgTasks, bool allow
                 } ) );
 
                 jobs.emplace_back( std::thread( [this] {
-                    for( auto& td : m_ctxMap[m_defaultCtx]->threads )
+                    for( auto& td : GetDefaultCtx().threads )
                     {
                         auto t = static_cast<CPUThreadData*>(td);
                         uint16_t tid = CompressThread( t->id );
@@ -1967,7 +1925,7 @@ Worker::~Worker()
     delete[] m_frameImageBuffer;
     delete[] m_tmpBuf;
 
-    // for( auto& v : m_ctxMap[m_defaultCtx]->threads )
+    // for( auto& v : GetDefaultCtx().threads )
     // {
     //     v->timeline.~Vector();
     //     v->stack.~Vector();
@@ -1989,6 +1947,10 @@ Worker::~Worker()
 #endif
             }
         }
+        for( auto& zc : v->zoneChildren )
+        {
+          zc.~Vector();
+        }
     }
     for( auto& v : m_data.plots.Data() )
     {
@@ -2002,10 +1964,6 @@ Worker::~Worker()
     {
         v.second->~LockMap();
     }
-    for( auto& v : m_data.zoneChildren )
-    {
-        v.~Vector();
-    }
     for( auto& v : m_data.memNameMap )
     {
         v.second->~MemData();
@@ -2013,10 +1971,6 @@ Worker::~Worker()
     for( auto& v : m_data.ctxSwitch )
     {
         v.second->v.~Vector();
-    }
-    for( auto& v : m_data.gpuChildren )
-    {
-        v.~Vector();
     }
 #ifndef TRACY_NO_STATISTICS
     for( auto& v : m_data.ghostChildren )
@@ -2096,7 +2050,7 @@ uint64_t Worker::GetChildSamplesCountFull() const
 uint64_t Worker::GetContextSwitchSampleCount() const
 {
     uint64_t cnt = 0;
-    for( auto& v : m_ctxMap[m_defaultCtx]->threads )
+    for( auto& v : GetDefaultCtx().threads )
     {
         auto t = static_cast<CPUThreadData*>(v);
         cnt += t->ctxSwitchSamples.size();
@@ -2373,14 +2327,14 @@ const uint64_t* Worker::GetInlineSymbolList( uint64_t sym, uint32_t len )
     return it;
 }
 
-int64_t Worker::GetZoneEndImpl( const ZoneEvent& ev )
+int64_t Worker::GetZoneEndImpl( const ZoneEvent& ev, const ZoneContext& ctx ) const
 {
     assert( !ev.IsEndValid() );
     auto ptr = &ev;
     for(;;)
     {
         if( !ptr->HasChildren() ) return ptr->Start() >= 0 ? ptr->Start() : m_data.lastTime;
-        auto& children = GetZoneChildren( ptr->Child() );
+        auto& children = ctx.GetZoneChildren( ptr->Child() );
         if( children.is_magic() )
         {
             auto& c = *(Vector<ZoneEvent>*)&children;
@@ -2639,22 +2593,6 @@ std::vector<int16_t> Worker::GetMatchingSourceLocation( const char* query, bool 
 }
 
 #ifndef TRACY_NO_STATISTICS
-Worker::SourceLocationZones& Worker::GetZonesForSourceLocation( int16_t srcloc )
-{
-    assert( AreSourceLocationZonesReady() );
-    static SourceLocationZones empty;
-    auto it = m_data.sourceLocationZones.find( srcloc );
-    return it != m_data.sourceLocationZones.end() ? it->second : empty;
-}
-
-const Worker::SourceLocationZones& Worker::GetZonesForSourceLocation( int16_t srcloc ) const
-{
-    assert( AreSourceLocationZonesReady() );
-    static const SourceLocationZones empty;
-    auto it = m_data.sourceLocationZones.find( srcloc );
-    return it != m_data.sourceLocationZones.end() ? it->second : empty;
-}
-
 const SymbolStats* Worker::GetSymbolStats( uint64_t symAddr ) const
 {
     assert( AreCallstackSamplesReady() );
@@ -2936,7 +2874,7 @@ void Worker::Exec()
             if( !m_crashed && !m_disconnect )
             {
                 bool done = true;
-                for( auto& v : m_ctxMap[m_defaultCtx]->threads )
+                for( auto& v : GetDefaultCtx().threads )
                 {
                     if( !v->stack.empty() )
                     {
@@ -3401,13 +3339,9 @@ int16_t Worker::NewShrinkedSourceLocation( uint64_t srcloc )
     const auto sz = int16_t( m_data.sourceLocationExpand.size() );
     m_data.sourceLocationExpand.push_back( srcloc );
 #ifndef TRACY_NO_STATISTICS
-    auto res = m_data.sourceLocationZones.emplace( sz, SourceLocationZones() );
-    m_data.srclocZonesLast.first = sz;
-    m_data.srclocZonesLast.second = &res.first->second;
+    GetDefaultCtx().InitSourceLocationZones( sz );
 #else
-    auto res = m_data.sourceLocationZonesCnt.emplace( sz, 0 );
-    m_data.srclocCntLast.first = sz;
-    m_data.srclocCntLast.second = &res.first->second;
+    GetDefaultCtx().InitSourceLocationZonesCnt( sz );
 #endif
     m_sourceLocationShrink.emplace( srcloc, sz );
     m_data.shrinkSrclocLast.first = srcloc;
@@ -3450,8 +3384,8 @@ void Worker::InsertMessageData( MessageData* msg )
 
 ThreadData* Worker::NoticeThreadReal( uint64_t thread )
 {
-    auto it = m_ctxMap[m_defaultCtx]->threadData.find( thread );
-    if( it != m_ctxMap[m_defaultCtx]->threadData.end() )
+    auto it = GetDefaultCtx().threadData.find( thread );
+    if( it != GetDefaultCtx().threadData.end() )
     {
         m_data.threadDataLast.first = thread;
         m_data.threadDataLast.second = it->second;
@@ -3466,8 +3400,8 @@ ThreadData* Worker::NoticeThreadReal( uint64_t thread )
 
 ThreadData* Worker::RetrieveThreadReal( uint64_t thread )
 {
-    auto it = m_ctxMap[m_defaultCtx]->threadData.find( thread );
-    if( it != m_ctxMap[m_defaultCtx]->threadData.end() )
+    auto it = GetDefaultCtx().threadData.find( thread );
+    if( it != GetDefaultCtx().threadData.end() )
     {
         m_data.threadDataLast.first = thread;
         m_data.threadDataLast.second = it->second;
@@ -3481,61 +3415,10 @@ ThreadData* Worker::RetrieveThreadReal( uint64_t thread )
 
 ThreadData* Worker::GetCurrentThreadData()
 {
-    auto td = m_ctxMap[m_defaultCtx]->threadCtxData;
-    if( !td ) td = m_ctxMap[m_defaultCtx]->threadCtxData = NoticeThread( m_ctxMap[m_defaultCtx]->threadCtx );
+    auto td = GetDefaultCtx().threadCtxData;
+    if( !td ) td = GetDefaultCtx().threadCtxData = NoticeThread( GetDefaultCtx().threadCtx );
     if( td->fiber ) td = td->fiber;
     return td;
-}
-
-#ifndef TRACY_NO_STATISTICS
-Worker::SourceLocationZones* Worker::GetSourceLocationZonesReal( uint16_t srcloc )
-{
-    auto it = m_data.sourceLocationZones.find( srcloc );
-    assert( it != m_data.sourceLocationZones.end() );
-    m_data.srclocZonesLast.first = srcloc;
-    m_data.srclocZonesLast.second = &it->second;
-    return &it->second;
-}
-/*
-Worker::GpuSourceLocationZones* Worker::GetGpuSourceLocationZonesReal( uint16_t srcloc )
-{
-    auto it = m_data.gpuSourceLocationZones.find( srcloc );
-    if( it == m_data.gpuSourceLocationZones.end() )
-    {
-        it = m_data.gpuSourceLocationZones.emplace( srcloc, GpuSourceLocationZones() ).first;
-    }
-    m_data.gpuZonesLast.first = srcloc;
-    m_data.gpuZonesLast.second = &it->second;
-    return &it->second;
-    }*/
-#else
-uint64_t* Worker::GetSourceLocationZonesCntReal( uint16_t srcloc )
-{
-    auto it = m_data.sourceLocationZonesCnt.find( srcloc );
-    assert( it != m_data.sourceLocationZonesCnt.end() );
-    m_data.srclocCntLast.first = srcloc;
-    m_data.srclocCntLast.second = &it->second;
-    return &it->second;
-}
-
-uint64_t* Worker::GetGpuSourceLocationZonesCntReal( uint16_t srcloc )
-{
-    auto it = m_data.gpuSourceLocationZonesCnt.find( srcloc );
-    if( it == m_data.gpuSourceLocationZonesCnt.end() )
-    {
-        it = m_data.gpuSourceLocationZonesCnt.emplace( srcloc, 0 ).first;
-    }
-    m_data.gpuCntLast.first = srcloc;
-    m_data.gpuCntLast.second = &it->second;
-    return &it->second;
-}
-#endif
-
-const ThreadData* Worker::GetThreadData( uint64_t tid ) const
-{
-    auto it = m_ctxMap[m_defaultCtx]->threadData.find( tid );
-    if( it == m_ctxMap[m_defaultCtx]->threadData.end() ) return nullptr;
-    return it->second;
 }
 
 const MemData& Worker::GetMemoryNamed( uint64_t name ) const
@@ -3561,9 +3444,9 @@ CPUThreadData* Worker::NewThread( uint64_t thread, bool fiber, int32_t groupHint
     td->stackCount = (uint8_t*)m_slab.AllocBig( sizeof( uint8_t ) * 64*1024 );
     memset( td->stackCount, 0, sizeof( uint8_t ) * 64*1024 );
     td->groupHint = groupHint;
-    td->ctx = m_ctxMap[m_defaultCtx];
-    m_ctxMap[m_defaultCtx]->threads.push_back( td );
-    m_ctxMap[m_defaultCtx]->threadData.emplace( thread, td );
+    td->ctx = &GetDefaultCtx();
+    GetDefaultCtx().threads.push_back( td );
+    GetDefaultCtx().threadData.emplace( thread, td );
     m_data.threadDataLast.first = thread;
     m_data.threadDataLast.second = td;
     return td;
@@ -3574,6 +3457,7 @@ void Worker::NewZone( ZoneEvent* zone )
     m_data.zonesCnt++;
 
     auto td = GetCurrentThreadData();
+    auto& zoneChildren = td->ctx->zoneChildren;
     td->count++;
     td->IncStackCount( zone->SrcLoc() );
     const auto ssz = td->stack.size();
@@ -3587,10 +3471,10 @@ void Worker::NewZone( ZoneEvent* zone )
         auto& back = td->stack.data()[ssz-1];
         if( !back->HasChildren() )
         {
-            back->SetChild( int32_t( m_data.zoneChildren.size() ) );
+            back->SetChild( int32_t( zoneChildren.size() ) );
             if( m_data.zoneVectorCache.empty() )
             {
-                m_data.zoneChildren.push_back( Vector<short_ptr<ZoneEvent>>( zone ) );
+                zoneChildren.push_back( Vector<short_ptr<ZoneEvent>>( zone ) );
             }
             else
             {
@@ -3598,14 +3482,14 @@ void Worker::NewZone( ZoneEvent* zone )
                 assert( !vze.empty() );
                 vze.clear();
                 vze.push_back_non_empty( zone );
-                m_data.zoneChildren.push_back( std::move( vze ) );
+                zoneChildren.push_back( std::move( vze ) );
             }
         }
         else
         {
             const auto backChild = back->Child();
-            assert( !m_data.zoneChildren[backChild].empty() );
-            m_data.zoneChildren[backChild].push_back_non_empty( zone );
+            assert( !zoneChildren[backChild].empty() );
+            zoneChildren[backChild].push_back_non_empty( zone );
         }
         td->stack.push_back_non_empty( zone );
     }
@@ -3614,7 +3498,7 @@ void Worker::NewZone( ZoneEvent* zone )
     td->nextZoneId = 0;
 
 #ifndef TRACY_NO_STATISTICS
-    if (m_ctxMap[m_defaultCtx]->type == ZoneContext::CPU)
+    if (GetDefaultCtx().type == ZoneContext::CPU)
       static_cast<CPUThreadData*>(td)->childTimeStack.push_back( 0 );
 #endif
 }
@@ -3774,13 +3658,9 @@ void Worker::AddSourceLocationPayload( const char* data, size_t sz )
         }
         const auto key = -int16_t( idx + 1 );
 #ifndef TRACY_NO_STATISTICS
-        auto res = m_data.sourceLocationZones.emplace( key, SourceLocationZones() );
-        m_data.srclocZonesLast.first = key;
-        m_data.srclocZonesLast.second = &res.first->second;
+        GetDefaultCtx().InitSourceLocationZones(key);
 #else
-        auto res = m_data.sourceLocationZonesCnt.emplace( key, 0 );
-        m_data.srclocCntLast.first = key;
-        m_data.srclocCntLast.second = &res.first->second;
+        GetDefaultCtx().InitSoruceLocationZonesCnt(key);
 #endif
     }
     else
@@ -4255,7 +4135,7 @@ void Worker::DoPostponedWork()
 
     if( m_identifySamples && m_data.newContextSwitchesReceived )
     {
-        for( auto& thd : m_ctxMap[m_defaultCtx]->threads )
+        for( auto& thd : GetDefaultCtx().threads )
         {
             auto td = static_cast<CPUThreadData*>(thd);
             if( !td->postponedSamples.empty() )
@@ -4417,7 +4297,7 @@ void Worker::HandlePostponedGhostZones()
     assert( m_data.newFramesWereReceived );
     if( !m_data.ghostZonesPostponed ) return;
     bool postponed = false;
-    for( auto& thd : m_ctxMap[m_defaultCtx]->threads )
+    for( auto& thd : GetDefaultCtx().threads )
     {
         auto td = static_cast<CPUThreadData*>(thd);
         while( td->ghostIdx != td->samples.size() )
@@ -4794,11 +4674,11 @@ bool Worker::Process( const QueueItem& ev )
 
 void Worker::ProcessThreadContext( const QueueThreadContext& ev )
 {
-    m_ctxMap[m_defaultCtx]->refTimeThread = 0;
-    if( m_ctxMap[m_defaultCtx]->threadCtx != ev.thread )
+    GetDefaultCtx().refTimeThread = 0;
+    if( GetDefaultCtx().threadCtx != ev.thread )
     {
-        m_ctxMap[m_defaultCtx]->threadCtx = ev.thread;
-        m_ctxMap[m_defaultCtx]->threadCtxData = RetrieveThread( ev.thread );
+        GetDefaultCtx().threadCtx = ev.thread;
+        GetDefaultCtx().threadCtxData = RetrieveThread( ev.thread );
     }
 }
 
@@ -4813,7 +4693,7 @@ void Worker::ProcessZoneBeginImpl( ZoneEvent* zone, const QueueZoneBegin& ev )
 {
     CheckSourceLocation( ev.srcloc );
 
-    const auto start = TscTime( RefTime( m_ctxMap[m_defaultCtx]->refTimeThread, ev.time ) );
+    const auto start = TscTime( RefTime( GetDefaultCtx().refTimeThread, ev.time ) );
     zone->SetStartSrcLoc( start, ShrinkSourceLocation( ev.srcloc ) );
     zone->SetEnd( -1 );
     zone->SetChild( -1 );
@@ -4827,7 +4707,7 @@ void Worker::ProcessZoneBeginAllocSrcLocImpl( ZoneEvent* zone, const QueueZoneBe
 {
     assert( m_pendingSourceLocationPayload != 0 );
 
-    const auto start = TscTime( RefTime( m_ctxMap[m_defaultCtx]->refTimeThread, ev.time ) );
+    const auto start = TscTime( RefTime( GetDefaultCtx().refTimeThread, ev.time ) );
     zone->SetStartSrcLoc( start, m_pendingSourceLocationPayload );
     zone->SetEnd( -1 );
     zone->SetChild( -1 );
@@ -4915,7 +4795,7 @@ void Worker::ProcessZoneEnd( const QueueZoneEnd& ev )
     auto zone = stack.back_and_pop();
     assert( zone->End() == -1 );
     const auto isReentry = td->DecStackCount( zone->SrcLoc() );
-    const auto timeEnd = TscTime( RefTime( m_ctxMap[m_defaultCtx]->refTimeThread, ev.time ) );
+    const auto timeEnd = TscTime( RefTime( td->ctx->refTimeThread, ev.time ) );
     zone->SetEnd( timeEnd );
     assert( timeEnd >= zone->Start() );
 
@@ -4923,7 +4803,7 @@ void Worker::ProcessZoneEnd( const QueueZoneEnd& ev )
 
     if( zone->HasChildren() )
     {
-        auto& childVec = m_data.zoneChildren[zone->Child()];
+        auto& childVec = td->ctx->zoneChildren[zone->Child()];
         const auto sz = childVec.size();
         if( sz <= 8 * 1024 )
         {
@@ -4949,7 +4829,7 @@ void Worker::ProcessZoneEnd( const QueueZoneEnd& ev )
     }
 
 #ifndef TRACY_NO_STATISTICS
-    if (m_ctxMap[m_defaultCtx]->type == ZoneContext::CPU)
+    if (td->ctx->type == ZoneContext::CPU)
     {
       auto ctd = static_cast<CPUThreadData*>(td);
       assert( !ctd->childTimeStack.empty() );
@@ -4957,11 +4837,11 @@ void Worker::ProcessZoneEnd( const QueueZoneEnd& ev )
       if( timeSpan > 0 )
       {
         const auto ctid = CompressThread( ctd->id );
-        ZoneThreadData ztd;
+        ZoneContext::ZoneThreadData ztd;
         ztd.SetZone( zone );
         ztd.SetThread( ctid );
 
-        auto slz = GetSourceLocationZones( zone->SrcLoc() );
+        auto slz = td->ctx->GetSourceLocationZones( zone->SrcLoc() );
         slz->zones.push_back( ztd );
         if( slz->min > timeSpan ) slz->min = timeSpan;
         if( slz->max < timeSpan ) slz->max = timeSpan;
@@ -5276,10 +5156,10 @@ void Worker::ProcessFrameImage( const QueueFrameImage& ev )
 
 void Worker::ProcessZoneText()
 {
-    auto td = RetrieveThread( m_ctxMap[m_defaultCtx]->threadCtx );
+    auto td = RetrieveThread( GetDefaultCtx().threadCtx );
     if( !td )
     {
-        ZoneTextFailure( m_ctxMap[m_defaultCtx]->threadCtx, m_pendingSingleString.ptr );
+        ZoneTextFailure( GetDefaultCtx().threadCtx, m_pendingSingleString.ptr );
         return;
     }
     if( td->fiber ) td = td->fiber;
@@ -5323,10 +5203,10 @@ void Worker::ProcessZoneText()
 
 void Worker::ProcessZoneName()
 {
-    auto td = RetrieveThread( m_ctxMap[m_defaultCtx]->threadCtx );
+    auto td = RetrieveThread( GetDefaultCtx().threadCtx );
     if( !td )
     {
-        ZoneNameFailure( m_ctxMap[m_defaultCtx]->threadCtx );
+        ZoneNameFailure( GetDefaultCtx().threadCtx );
         return;
     }
     if( td->fiber ) td = td->fiber;
@@ -5345,10 +5225,10 @@ void Worker::ProcessZoneName()
 
 void Worker::ProcessZoneColor( const QueueZoneColor& ev )
 {
-    auto td = RetrieveThread( m_ctxMap[m_defaultCtx]->threadCtx );
+    auto td = RetrieveThread( GetDefaultCtx().threadCtx );
     if( !td )
     {
-        ZoneColorFailure( m_ctxMap[m_defaultCtx]->threadCtx );
+        ZoneColorFailure( GetDefaultCtx().threadCtx );
         return;
     }
     if( td->fiber ) td = td->fiber;
@@ -5371,10 +5251,10 @@ void Worker::ProcessZoneValue( const QueueZoneValue& ev )
     char tmp[64];
     const auto tsz = sprintf( tmp, "%" PRIu64 " [0x%" PRIx64 "]", ev.value, ev.value );
 
-    auto td = RetrieveThread( m_ctxMap[m_defaultCtx]->threadCtx );
+    auto td = RetrieveThread( GetDefaultCtx().threadCtx );
     if( !td )
     {
-        ZoneValueFailure( m_ctxMap[m_defaultCtx]->threadCtx, ev.value );
+        ZoneValueFailure( GetDefaultCtx().threadCtx, ev.value );
         return;
     }
     if( td->fiber ) td = td->fiber;
@@ -5597,7 +5477,7 @@ void Worker::ProcessPlotDataImpl( uint64_t name, int64_t evTime, double val )
         Query( ServerQueryPlotName, name );
     } );
 
-    const auto time = TscTime( RefTime( m_ctxMap[m_defaultCtx]->refTimeThread, evTime ) );
+    const auto time = TscTime( RefTime( GetDefaultCtx().refTimeThread, evTime ) );
     if( m_data.lastTime < time ) m_data.lastTime = time;
     InsertPlot( plot, time, val );
 }
@@ -5799,7 +5679,7 @@ void Worker::ProcessGpuZoneBeginImplCommon( ZoneEvent* zone, const QueueGpuZoneB
     }
     else
     {
-        cpuTime = RefTime( m_ctxMap[m_defaultCtx]->refTimeThread, ev.cpuTime );
+        cpuTime = RefTime( GetDefaultCtx().refTimeThread, ev.cpuTime );
     }
     auto zoneExtra = GetZoneExtra(*zone);
 
@@ -5845,10 +5725,10 @@ void Worker::ProcessGpuZoneBeginImplCommon( ZoneEvent* zone, const QueueGpuZoneB
         auto back = stack.back();
         if( back->Child() < 0 )
         {
-            back->SetChild( int32_t( m_data.gpuChildren.size() ) );
-            m_data.gpuChildren.push_back( Vector<short_ptr<ZoneEvent>>() );
+            back->SetChild( int32_t( ctx->zoneChildren.size() ) );
+            ctx->zoneChildren.push_back( Vector<short_ptr<ZoneEvent>>() );
         }
-        timeline = &m_data.gpuChildren[back->Child()];
+        timeline = &ctx->zoneChildren[back->Child()];
     }
 
     timeline->push_back( zone );
@@ -5936,7 +5816,7 @@ void Worker::ProcessGpuZoneEnd( const QueueGpuZoneEnd& ev, bool serial )
     }
     else
     {
-        cpuTime = RefTime( m_ctxMap[m_defaultCtx]->refTimeThread, ev.cpuTime );
+        cpuTime = RefTime( GetDefaultCtx().refTimeThread, ev.cpuTime );
     }
     const auto time = TscTime( cpuTime );
     extra.otherEnd.SetVal( time );
@@ -6004,18 +5884,17 @@ void Worker::ProcessGpuTime( const QueueGpuTime& ev )
         const auto timeSpan = gpuTime - gpuStart;
         if( timeSpan > 0 )
         {
-            ZoneThreadData ztd;
+            ZoneContext::ZoneThreadData ztd;
             ztd.SetZone( zone );
             //ztd.SetThread( zone->Thread() );
             ztd.SetThread( ctx->threadCtx ); // TODO: Need cpu thread ctx packet
-            /*
-            auto slz = GetGpuSourceLocationZones( zone->SrcLoc() );
+
+            auto slz = ctx->GetSourceLocationZones( zone->SrcLoc() );
             slz->zones.push_back( ztd );
             if( slz->min > timeSpan ) slz->min = timeSpan;
             if( slz->max < timeSpan ) slz->max = timeSpan;
             slz->total += timeSpan;
             slz->sumSq += double( timeSpan ) * timeSpan;
-            */
         }
 #else
         CountZoneStatistics( zone );
@@ -7124,7 +7003,7 @@ void Worker::ProcessThreadGroupHint( const QueueThreadGroupHint& ev )
 
 void Worker::ProcessFiberEnter( const QueueFiberEnter& ev )
 {
-    const auto t = TscTime( RefTime( m_ctxMap[m_defaultCtx]->refTimeThread, ev.time ) );
+    const auto t = TscTime( RefTime( GetDefaultCtx().refTimeThread, ev.time ) );
     if( m_data.lastTime < t ) m_data.lastTime = t;
 
     uint64_t tid;
@@ -7174,7 +7053,7 @@ void Worker::ProcessFiberEnter( const QueueFiberEnter& ev )
 
 void Worker::ProcessFiberLeave( const QueueFiberLeave& ev )
 {
-    const auto t = TscTime( RefTime( m_ctxMap[m_defaultCtx]->refTimeThread, ev.time ) );
+    const auto t = TscTime( RefTime( GetDefaultCtx().refTimeThread, ev.time ) );
     if( m_data.lastTime < t ) m_data.lastTime = t;
 
     auto td = RetrieveThread( ev.thread );
@@ -7661,14 +7540,14 @@ void Worker::UpdateSampleStatisticsImpl( const CallstackFrameData** frames, uint
 }
 #endif
 
-int64_t Worker::ReadTimeline( FileRead& f, ZoneEvent* zone, int64_t refTime, int32_t& childIdx )
+int64_t Worker::ReadTimeline( FileRead& f, ZoneEvent* zone, ZoneContext* ctx, int64_t refTime, int32_t& childIdx )
 {
     uint32_t sz;
     f.Read( sz );
-    return ReadTimelineHaveSize( f, zone, refTime, childIdx, sz );
+    return ReadTimelineHaveSize( f, zone, ctx, refTime, childIdx, sz );
 }
 
-int64_t Worker::ReadTimelineHaveSize( FileRead& f, ZoneEvent* zone, int64_t refTime, int32_t& childIdx, uint32_t sz )
+int64_t Worker::ReadTimelineHaveSize( FileRead& f, ZoneEvent* zone, ZoneContext* ctx, int64_t refTime, int32_t& childIdx, uint32_t sz )
 {
     if( sz == 0 )
     {
@@ -7680,43 +7559,21 @@ int64_t Worker::ReadTimelineHaveSize( FileRead& f, ZoneEvent* zone, int64_t refT
         const auto idx = childIdx;
         childIdx++;
         zone->SetChild( idx );
-        return ReadTimeline( f, m_data.zoneChildren[idx], sz, refTime, childIdx );
+        return ReadTimeline( f, ctx->zoneChildren[idx], ctx, sz, refTime, childIdx );
     }
-}
-/*
-void Worker::ReadTimeline( FileRead& f, GpuEvent* zone, int64_t& refTime, int64_t& refGpuTime, int32_t& childIdx, bool hasQueryId )
-{
-    uint64_t sz;
-    f.Read( sz );
-    ReadTimelineHaveSize( f, zone, refTime, refGpuTime, childIdx, sz, hasQueryId );
 }
 
-void Worker::ReadTimelineHaveSize( FileRead& f, GpuEvent* zone, int64_t& refTime, int64_t& refGpuTime, int32_t& childIdx, uint64_t sz, bool hasQueryId )
-{
-    if( sz == 0 )
-    {
-        zone->SetChild( -1 );
-    }
-    else
-    {
-        const auto idx = childIdx;
-        childIdx++;
-        zone->SetChild( idx );
-        ReadTimeline( f, m_data.gpuChildren[idx], sz, refTime, refGpuTime, childIdx, hasQueryId );
-    }
-}
-*/
 #ifndef TRACY_NO_STATISTICS
-void Worker::ReconstructZoneStatistics( uint8_t* countMap, ZoneEvent& zone, uint16_t thread )
+void Worker::ReconstructZoneStatistics( uint8_t* countMap, ZoneEvent& zone, ZoneContext& ctx, uint16_t thread )
 {
     assert( zone.IsEndValid() );
     auto timeSpan = zone.End() - zone.Start();
     if( timeSpan > 0 )
     {
-        auto it = m_data.sourceLocationZones.find( zone.SrcLoc() );
-        assert( it != m_data.sourceLocationZones.end() );
+        auto it = ctx.sourceLocationZones.find( zone.SrcLoc() );
+        assert( it != ctx.sourceLocationZones.end() );
 
-        ZoneThreadData ztd;
+        ZoneContext::ZoneThreadData ztd;
         ztd.SetZone( &zone );
         ztd.SetThread( thread );
 
@@ -7737,7 +7594,7 @@ void Worker::ReconstructZoneStatistics( uint8_t* countMap, ZoneEvent& zone, uint
 
         if( zone.HasChildren() )
         {
-            auto& children = GetZoneChildren( zone.Child() );
+            auto& children = ctx.GetZoneChildren( zone.Child() );
             assert( children.is_magic() );
             auto& c = *(Vector<ZoneEvent>*)( &children );
             for( auto& v : c )
@@ -7762,45 +7619,16 @@ void Worker::ReconstructZoneStatistics( uint8_t* countMap, ZoneEvent& zone, uint
         }
     }
 }
-/*
-void Worker::ReconstructZoneStatistics( GpuEvent& zone, uint16_t thread )
-{
-    assert( zone.GpuEnd() >= 0 );
-    auto timeSpan = zone.GpuEnd() - zone.GpuStart();
-    if( timeSpan > 0 )
-    {
-        auto it = m_data.gpuSourceLocationZones.find( zone.SrcLoc() );
-        if( it == m_data.gpuSourceLocationZones.end() )
-        {
-            it = m_data.gpuSourceLocationZones.emplace( zone.SrcLoc(), GpuSourceLocationZones {} ).first;
-        }
-        GpuZoneThreadData ztd;
-        ztd.SetZone( &zone );
-        ztd.SetThread( thread );
-        auto& slz = it->second;
-        slz.zones.push_back( ztd );
-        if( slz.min > timeSpan ) slz.min = timeSpan;
-        if( slz.max < timeSpan ) slz.max = timeSpan;
-        slz.total += timeSpan;
-        slz.sumSq += double( timeSpan ) * timeSpan;
-    }
-}
-*/
-#else
-void Worker::CountZoneStatistics( ZoneEvent* zone )
-{
-    auto cnt = GetSourceLocationZonesCnt( zone->SrcLoc() );
-    (*cnt)++;
-}
 
-void Worker::CountZoneStatistics( GpuEvent* zone )
+#else
+void Worker::CountZoneStatistics( ZoneEvent* zone, ZoneContext* ctx )
 {
-    auto cnt = GetGpuSourceLocationZonesCnt( zone->SrcLoc() );
+    auto cnt = ctx->GetSourceLocationZonesCnt( zone->SrcLoc() );
     (*cnt)++;
 }
 #endif
 
-int64_t Worker::ReadTimeline( FileRead& f, Vector<short_ptr<ZoneEvent>>& _vec, uint32_t size, int64_t refTime, int32_t& childIdx )
+int64_t Worker::ReadTimeline( FileRead& f, Vector<short_ptr<ZoneEvent>>& _vec, ZoneContext* ctx, uint32_t size, int64_t refTime, int32_t& childIdx )
 {
     assert( size != 0 );
     const auto lp = s_loadProgress.subProgress.load( std::memory_order_relaxed );
@@ -7821,7 +7649,7 @@ int64_t Worker::ReadTimeline( FileRead& f, Vector<short_ptr<ZoneEvent>>& _vec, u
         refTime += tstart;
         zone->SetStartSrcLoc( refTime, srcloc );
         zone->extra = extra;
-        refTime = ReadTimelineHaveSize( f, zone, refTime, childIdx, childSz );
+        refTime = ReadTimelineHaveSize( f, zone, ctx, refTime, childIdx, childSz );
         f.Read5( tend, srcloc, tstart, extra, childSz );
         refTime += tend;
         zone->SetEnd( refTime );
@@ -7834,7 +7662,7 @@ int64_t Worker::ReadTimeline( FileRead& f, Vector<short_ptr<ZoneEvent>>& _vec, u
     refTime += tstart;
     zone->SetStartSrcLoc( refTime, srcloc );
     zone->extra = extra;
-    refTime = ReadTimelineHaveSize( f, zone, refTime, childIdx, childSz );
+    refTime = ReadTimelineHaveSize( f, zone, ctx, refTime, childIdx, childSz );
     f.Read( tend );
     refTime += tend;
     zone->SetEnd( refTime );
@@ -7844,43 +7672,7 @@ int64_t Worker::ReadTimeline( FileRead& f, Vector<short_ptr<ZoneEvent>>& _vec, u
 
     return refTime;
 }
-/*
-void Worker::ReadTimeline( FileRead& f, Vector<short_ptr<GpuEvent>>& _vec, uint64_t size, int64_t& refTime, int64_t& refGpuTime, int32_t& childIdx, bool hasQueryId )
-{
-    assert( size != 0 );
-    const auto lp = s_loadProgress.subProgress.load( std::memory_order_relaxed );
-    s_loadProgress.subProgress.store( lp + size, std::memory_order_relaxed );
-    auto& vec = *(Vector<GpuEvent>*)( &_vec );
-    vec.set_magic();
-    vec.reserve_exact( size, m_slab );
-    auto zone = vec.begin();
-    auto end = vec.end();
-    do
-    {
-        int64_t tcpu, tgpu;
-        int16_t srcloc;
-        uint16_t thread;
-        uint64_t childSz;
-        f.Read6( tcpu, tgpu, srcloc, zone->callstack, thread, childSz );
-        zone->SetSrcLoc( srcloc );
-        zone->SetThread( thread );
-        refTime += tcpu;
-        refGpuTime += tgpu;
-        zone->SetCpuStart( refTime );
-        zone->SetGpuStart( refGpuTime );
 
-        ReadTimelineHaveSize( f, zone, refTime, refGpuTime, childIdx, childSz, hasQueryId );
-
-        f.Read2( tcpu, tgpu );
-        refTime += tcpu;
-        refGpuTime += tgpu;
-        zone->SetCpuEnd( refTime );
-        zone->SetGpuEnd( refGpuTime );
-        if( hasQueryId ) f.Read( zone->query_id );
-    }
-    while( ++zone != end );
-}
-*/
 void Worker::Disconnect()
 {
     //Query( ServerQueryDisconnect, 0 );
@@ -8058,45 +7850,30 @@ void Worker::Write( FileWrite& f, bool fiDict )
     }
 
 #ifndef TRACY_NO_STATISTICS
-    sz = m_data.sourceLocationZones.size();
-    f.Write( &sz, sizeof( sz ) );
-    for( auto& v : m_data.sourceLocationZones )
+    for( auto ctx : m_data.contexts )
     {
-        int16_t id = v.first;
-        uint64_t cnt = v.second.zones.size();
-        f.Write( &id, sizeof( id ) );
-        f.Write( &cnt, sizeof( cnt ) );
+        sz = ctx->sourceLocationZones.size();
+        f.Write( &sz, sizeof( sz ) );
+        for( auto& v : ctx->sourceLocationZones )
+        {
+            int16_t id = v.first;
+            uint64_t cnt = v.second.zones.size();
+            f.Write( &id, sizeof( id ) );
+            f.Write( &cnt, sizeof( cnt ) );
+        }
     }
-    /*
-    sz = m_data.gpuSourceLocationZones.size();
-    f.Write( &sz, sizeof( sz ) );
-    for( auto& v : m_data.gpuSourceLocationZones )
-    {
-        int16_t id = v.first;
-        uint64_t cnt = v.second.zones.size();
-        f.Write( &id, sizeof( id ) );
-        f.Write( &cnt, sizeof( cnt ) );
-    }
-    */
 #else
-    sz = m_data.sourceLocationZonesCnt.size();
-    f.Write( &sz, sizeof( sz ) );
-    for( auto& v : m_data.sourceLocationZonesCnt )
+    for( auto ctx : m_data.contexts )
     {
-        int16_t id = v.first;
-        uint64_t cnt = v.second;
-        f.Write( &id, sizeof( id ) );
-        f.Write( &cnt, sizeof( cnt ) );
-    }
-
-    sz = m_data.gpuSourceLocationZonesCnt.size();
-    f.Write( &sz, sizeof( sz ) );
-    for( auto& v : m_data.gpuSourceLocationZonesCnt )
-    {
-        int16_t id = v.first;
-        uint64_t cnt = v.second;
-        f.Write( &id, sizeof( id ) );
-        f.Write( &cnt, sizeof( cnt ) );
+        sz = ctx->sourceLocationZonesCnt.size();
+        f.Write( &sz, sizeof( sz ) );
+        for( auto& v : ctx->sourceLocationZonesCnt )
+        {
+            int16_t id = v.first;
+            uint64_t cnt = v.second;
+            f.Write( &id, sizeof( id ) );
+            f.Write( &cnt, sizeof( cnt ) );
+        }
     }
 #endif
 
@@ -8150,13 +7927,13 @@ void Worker::Write( FileWrite& f, bool fiDict )
     f.Write( m_data.zoneExtra.data(), sz * sizeof( ZoneExtra ) );
 
     sz = 0;
-    for( auto& v : m_ctxMap[m_defaultCtx]->threads ) sz += v->count;
+    for( auto& v : GetDefaultCtx().threads ) sz += v->count;
     f.Write( &sz, sizeof( sz ) );
-    sz = m_data.zoneChildren.size();
+    sz = GetDefaultCtx().zoneChildren.size();
     f.Write( &sz, sizeof( sz ) );
-    sz = m_ctxMap[m_defaultCtx]->threads.size();
+    sz = GetDefaultCtx().threads.size();
     f.Write( &sz, sizeof( sz ) );
-    for( auto& td : m_ctxMap[m_defaultCtx]->threads )
+    for( auto& td : GetDefaultCtx().threads )
     {
         auto thread = static_cast<CPUThreadData*>(td);
         int64_t refTime = 0;
@@ -8165,7 +7942,7 @@ void Worker::Write( FileWrite& f, bool fiDict )
         f.Write( &thread->kernelSampleCnt, sizeof( thread->kernelSampleCnt ) );
         f.Write( &thread->isFiber, sizeof( thread->isFiber ) );
         f.Write( &thread->groupHint, sizeof( thread->groupHint ) );
-        WriteTimeline( f, thread->timeline, refTime );
+        WriteTimeline( f, thread->timeline, refTime, GetDefaultCtx() );
         sz = thread->messages.size();
         f.Write( &sz, sizeof( sz ) );
         for( auto& v : thread->messages )
@@ -8202,12 +7979,13 @@ void Worker::Write( FileWrite& f, bool fiDict )
     sz = 0;
     for( auto& v : m_data.contexts ) sz += v->count;
     f.Write( &sz, sizeof( sz ) );
-    sz = m_data.gpuChildren.size();
-    f.Write( &sz, sizeof( sz ) );
     sz = m_data.contexts.size();
     f.Write( &sz, sizeof( sz ) );
     for( auto& cntx : m_data.contexts )
     {
+        sz = cntx->zoneChildren.size();
+        f.Write( &sz, sizeof( sz ) );
+
         if (cntx->type != ZoneContext::GPU) continue;
         auto ctx = static_cast<GpuCtxData*>(cntx);
         f.Write( &ctx->thread, sizeof( ctx->thread ) );
@@ -8233,7 +8011,7 @@ void Worker::Write( FileWrite& f, bool fiDict )
             int64_t refGpuTime = 0;
             uint64_t tid = td.first;
             f.Write( &tid, sizeof( tid ) );
-            WriteTimeline( f, td.second->timeline, refTime );
+            WriteTimeline( f, td.second->timeline, refTime, *cntx );
         }
 
         sz = ctx->notes.size();
@@ -8549,22 +8327,22 @@ void Worker::Write( FileWrite& f, bool fiDict )
     }
 }
 
-void Worker::WriteTimeline( FileWrite& f, const Vector<short_ptr<ZoneEvent>>& vec, int64_t& refTime )
+void Worker::WriteTimeline( FileWrite& f, const Vector<short_ptr<ZoneEvent>>& vec, int64_t& refTime, ZoneContext& ctx )
 {
     uint32_t sz = uint32_t( vec.size() );
     f.Write( &sz, sizeof( sz ) );
     if( vec.is_magic() )
     {
-        WriteTimelineImpl<VectorAdapterDirect<ZoneEvent>>( f, *(Vector<ZoneEvent>*)( &vec ), refTime );
+        WriteTimelineImpl<VectorAdapterDirect<ZoneEvent>>( f, *(Vector<ZoneEvent>*)( &vec ), refTime, ctx );
     }
     else
     {
-        WriteTimelineImpl<VectorAdapterPointer<ZoneEvent>>( f, vec, refTime );
+        WriteTimelineImpl<VectorAdapterPointer<ZoneEvent>>( f, vec, refTime, ctx );
     }
 }
 
 template<typename Adapter, typename V>
-void Worker::WriteTimelineImpl( FileWrite& f, const V& vec, int64_t& refTime )
+void Worker::WriteTimelineImpl( FileWrite& f, const V& vec, int64_t& refTime, ZoneContext& ctx )
 {
     Adapter a;
     for( auto& val : vec )
@@ -8582,7 +8360,7 @@ void Worker::WriteTimelineImpl( FileWrite& f, const V& vec, int64_t& refTime )
         }
         else
         {
-            WriteTimeline( f, GetZoneChildren( v.Child() ), refTime );
+            WriteTimeline( f, ctx.GetZoneChildren( v.Child() ), refTime, ctx );
         }
         WriteTimeOffset( f, refTime, v.End() );
     }

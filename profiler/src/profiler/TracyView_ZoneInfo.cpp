@@ -1486,12 +1486,9 @@ void View::ShowZoneInfo( const ZoneEvent& ev )
     m_zoneInfoWindow = &ev;
 }
 
-void View::ZoneTooltip( const ZoneEvent& ev )
+void View::ZoneTooltip( const ZoneEvent& ev, const ThreadData& thread )
 {
-    auto threadCtx = GetZoneThreadCtx( ev );
-    auto threadData = threadCtx.second;
-    auto zoneCtx = threadCtx.first;
-    const auto tid = threadData->id;
+    const auto tid = thread.id;
     auto& srcloc = m_worker.GetSourceLocation( ev.SrcLoc() );
     const auto end = m_worker.GetZoneEnd( ev );
     const auto ztime = end - ev.Start();
@@ -1543,39 +1540,39 @@ void View::ZoneTooltip( const ZoneEvent& ev )
         TextDisabledUnformatted( buf );
     }
 
-    if( zoneCtx->type == ZoneContext::GPU )
+    if( thread.ctx->type == ZoneContext::GPU )
     {
         assert( m_worker.HasZoneExtra( ev ) );
         auto& extra = m_worker.GetZoneExtra( ev );
         TextFocused( "CPU command setup time:", TimeToString( extra.otherEnd.Val() - extra.otherStart.Val() ) );
-        if( !zoneCtx )
+        if( !thread.ctx )
         {
             TextFocused( "Delay to execution:", TimeToString( ev.Start() - extra.otherStart.Val() ) );
         }
         else
         {
             int64_t begin;
-            if( threadData->timeline.is_magic() )
+            if( thread.timeline.is_magic() )
             {
-                begin = ( (Vector<ZoneEvent>*)&threadData->timeline )->front().Start();
+                begin = ( (Vector<ZoneEvent>*)&thread.timeline )->front().Start();
             }
             else
             {
-                begin = threadData->timeline.front()->Start();
+                begin = thread.timeline.front()->Start();
             }
-            const auto drift = GpuDrift( zoneCtx );
+            const auto drift = GpuDrift( thread.ctx );
             TextFocused( "Delay to execution:", TimeToString( AdjustGpuTime( ev.Start(), begin, drift ) - extra.otherStart.Val() ) );
         }
     }
 
-    if( m_worker.HasZoneExtra( ev ) && zoneCtx->notes.contains( m_worker.GetZoneExtra( ev ).query_id ) )
+    if( m_worker.HasZoneExtra( ev ) && thread.ctx->notes.contains( m_worker.GetZoneExtra( ev ).query_id ) )
     {
         auto& extra = m_worker.GetZoneExtra( ev );
-        for( auto& p : zoneCtx->notes.at( extra.query_id ) )
+        for( auto& p : thread.ctx->notes.at( extra.query_id ) )
         {
-            if( zoneCtx->noteNames.count( p.first ) )
+            if( thread.ctx->noteNames.count( p.first ) )
             {
-                TextFocused( m_worker.GetString( zoneCtx->noteNames.at( p.first ) ), RealToString( p.second ) );
+                TextFocused( m_worker.GetString( thread.ctx->noteNames.at( p.first ) ), RealToString( p.second ) );
             }
             else
             {

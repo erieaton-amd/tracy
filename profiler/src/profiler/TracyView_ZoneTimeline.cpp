@@ -59,7 +59,7 @@ void View::DrawThread( const TimelineContext& ctx, const ThreadData& thread, con
     const auto yPos = wpos.y + offset;
     if( !draw.empty() && yPos <= yMax && yPos + ostep * depth >= yMin )
     {
-        DrawZoneList( ctx, draw, offset, thread.id );
+        DrawZoneList( ctx, draw, offset, thread );
     }
     offset += ostep * depth;
 
@@ -199,7 +199,7 @@ void View::DrawThreadOverlays( const ThreadData& thread, const ImVec2& ul, const
     }
 }
 
-void View::DrawZoneList( const TimelineContext& ctx, const std::vector<TimelineDraw>& drawList, int _offset, uint64_t tid )
+void View::DrawZoneList( const TimelineContext& ctx, const std::vector<TimelineDraw>& drawList, int _offset, const ThreadData& thread )
 {
     auto draw = ImGui::GetWindowDrawList();
     const auto w = ctx.w;
@@ -224,7 +224,7 @@ void View::DrawZoneList( const TimelineContext& ctx, const std::vector<TimelineD
         case TimelineDrawType::Folded:
         {
             auto& ev = *(const ZoneEvent*)v.ev.get();
-            const auto color = v.inheritedColor ? v.inheritedColor : ( m_vd.dynamicColors == 2 ? 0xFF666666 : GetThreadColor( tid, v.depth ) );
+            const auto color = v.inheritedColor ? v.inheritedColor : ( m_vd.dynamicColors == 2 ? 0xFF666666 : GetThreadColor( thread.id, v.depth ) );
             const auto rend = v.rend.Val();
             const auto px0 = ( ev.Start() - vStart ) * pxns;
             const auto px1 = ( rend - vStart ) * pxns;
@@ -285,7 +285,7 @@ void View::DrawZoneList( const TimelineContext& ctx, const std::vector<TimelineD
             auto& ev = *(const ZoneEvent*)v.ev.get();
             const auto end = m_worker.GetZoneEnd( ev );
             const auto zsz = std::max( ( end - ev.Start() ) * pxns, pxns * 0.5 );
-            const auto zoneColor = GetZoneColorData( ev, tid, v.depth, v.inheritedColor );
+            const auto zoneColor = GetZoneColorData( ev, thread.id, v.depth, v.inheritedColor );
             const char* zoneName = m_worker.GetZoneName( ev );
 
             auto tsz = ImGui::CalcTextSize( zoneName );
@@ -372,7 +372,7 @@ void View::DrawZoneList( const TimelineContext& ctx, const std::vector<TimelineD
         case TimelineDrawType::GhostFolded:
         {
             auto& ev = *(const GhostZone*)v.ev.get();
-            const auto color = m_vd.dynamicColors == 2 ? 0xFF666666 : MixGhostColor( GetThreadColor( tid, v.depth ), 0x665555 );
+            const auto color = m_vd.dynamicColors == 2 ? 0xFF666666 : MixGhostColor( GetThreadColor( thread.id, v.depth ), 0x665555 );
             const auto rend = v.rend.Val();
             const auto px0 = ( ev.start.Val() - m_vd.zvStart ) * pxns;
             const auto px1 = ( rend - m_vd.zvStart ) * pxns;
@@ -418,7 +418,7 @@ void View::DrawZoneList( const TimelineContext& ctx, const std::vector<TimelineD
             }
             else
             {
-                color = MixGhostColor( GetThreadColor( tid, v.depth ), 0x665555 );
+                color = MixGhostColor( GetThreadColor( thread.id, v.depth ), 0x665555 );
             }
 
             const auto pr0 = ( ev.start.Val() - m_vd.zvStart ) * pxns;
@@ -470,10 +470,10 @@ void View::DrawZoneList( const TimelineContext& ctx, const std::vector<TimelineD
                     TextDisabledUnformatted( ICON_FA_GHOST " Ghost zone" );
                     ImGui::Separator();
                     TextFocused( "Unknown frame:", symName );
-                    TextFocused( "Thread:", m_worker.GetThreadName( tid ) );
+                    TextFocused( "Thread:", m_worker.GetThreadName( thread.id ) );
                     ImGui::SameLine();
-                    ImGui::TextDisabled( "(%s)", RealToString( tid ) );
-                    if( m_worker.IsThreadFiber( tid ) )
+                    ImGui::TextDisabled( "(%s)", RealToString( thread.id ) );
+                    if( m_worker.IsThreadFiber( thread.id ) )
                     {
                         ImGui::SameLine();
                         TextColoredUnformatted( ImVec4( 0.2f, 0.6f, 0.2f, 1.f ), "Fiber" );
@@ -578,10 +578,10 @@ void View::DrawZoneList( const TimelineContext& ctx, const std::vector<TimelineD
                     ImGui::TextUnformatted( LocationToString( file, line ) );
                     ImGui::SameLine();
                     ImGui::TextDisabled( "(0x%" PRIx64 ")", sym.symAddr );
-                    TextFocused( "Thread:", m_worker.GetThreadName( tid ) );
+                    TextFocused( "Thread:", m_worker.GetThreadName( thread.id ) );
                     ImGui::SameLine();
-                    ImGui::TextDisabled( "(%s)", RealToString( tid ) );
-                    if( m_worker.IsThreadFiber( tid ) )
+                    ImGui::TextDisabled( "(%s)", RealToString( thread.id ) );
+                    if( m_worker.IsThreadFiber( thread.id ) )
                     {
                         ImGui::SameLine();
                         TextColoredUnformatted( ImVec4( 0.2f, 0.6f, 0.2f, 1.f ), "Fiber" );

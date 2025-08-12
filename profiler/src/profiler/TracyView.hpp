@@ -254,7 +254,7 @@ private:
     void DrawTimelineFrames( const FrameData& frames );
     void DrawTimeline();
     void DrawSampleList( const TimelineContext& ctx, const std::vector<SamplesDraw>& drawList, const Vector<SampleData>& vec, int offset );
-    void DrawZoneList( const TimelineContext& ctx, const std::vector<TimelineDraw>& drawList, int offset, uint64_t tid );
+    void DrawZoneList( const TimelineContext& ctx, const std::vector<TimelineDraw>& drawList, int offset, const ThreadData& thread );
     void DrawContextSwitchList( const TimelineContext& ctx, const std::vector<ContextSwitchDraw>& drawList, const Vector<ContextSwitchData>& ctxSwitch, int offset, int endOffset, bool isFiber );
     int DispatchGpuZoneLevel( const Vector<short_ptr<ZoneEvent>>& vec, bool hover, double pxns, int64_t nspx, const ImVec2& wpos, int offset, int depth, uint64_t thread, float yMin, float yMax, int64_t begin, int drift );
     template<typename Adapter, typename V>
@@ -346,7 +346,7 @@ private:
 
     void ShowZoneInfo( const ZoneEvent& ev );
 
-    void ZoneTooltip( const ZoneEvent& ev );
+    void ZoneTooltip( const ZoneEvent& ev, const ThreadData& thread );
   //void ZoneTooltip( const GpuEvent& ev );
     void CallstackTooltip( uint32_t idx );
     void CallstackTooltipContents( uint32_t idx );
@@ -359,8 +359,6 @@ private:
     bool IsZoneReentry( const ZoneEvent& zone, uint64_t tid ) const;
   //const GpuEvent* GetZoneParent( const GpuEvent& zone ) const;
     const ThreadData* GetZoneThreadData( const ZoneEvent& zone ) const;
-    const std::pair<const ZoneContext*, const ThreadData*> GetZoneThreadCtx( const ZoneEvent& zone ) const;
-  //uint64_t GetZoneThread( const GpuEvent& zone ) const;
     const ZoneContext* GetZoneCtx( const ZoneEvent& zone ) const;
     bool FindMatchingZone( int prev0, int prev1, int flags );
     const ZoneEvent* FindZoneAtTime( uint64_t thread, int64_t time ) const;
