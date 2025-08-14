@@ -50,6 +50,8 @@ void View::DrawStatistics()
     {
         m_statCtxName = m_worker.GetCtxName( m_statCtx );
     }
+    // TODO: Get a better width
+    ImGui::SetNextItemWidth( ImGui::CalcTextSize( "GPU:1 rocprofv3" ).x + ImGui::GetTextLineHeight() * 2 );
     if( ImGui::BeginCombo( "##zonestatsctx", m_statCtxName.c_str() ) )
     {
         for( uint8_t i = 0; i < ctxs.size(); i++ )
@@ -64,6 +66,8 @@ void View::DrawStatistics()
         ImGui::EndCombo();
     }
     auto ctx = ctxs[m_statCtx];
+
+    ImGui::SameLine();
 
     if( !ctx->AreSourceLocationZonesReady() && ( !m_worker.AreCallstackSamplesReady() || m_worker.GetCallstackSampleCount() == 0 ) )
     {

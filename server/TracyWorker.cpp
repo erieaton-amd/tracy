@@ -558,7 +558,6 @@ Worker::Worker( FileRead& f, EventType::Type eventMask, bool bgTasks, bool allow
     , m_allowStringModification( allowStringModification )
 {
     auto loadStart = std::chrono::high_resolution_clock::now();
-    ProcessCpuNewContext();
 
     int fileVer = 0;
 
@@ -631,6 +630,7 @@ Worker::Worker( FileRead& f, EventType::Type eventMask, bool bgTasks, bool allow
         f.Read( tmp, sz );
         m_hostInfo = std::string( tmp, tmp+sz );
     }
+    ProcessCpuNewContext();
 
     f.Read( sz );
     m_data.cpuTopology.reserve( sz );
@@ -3432,11 +3432,11 @@ const std::string Worker::GetCtxName( uint8_t idx ) const
     {
         ctxName << "CTX";
     }
+    ctxName << ":" << (unsigned)idx;
     if( ctx->name.Active() )
     {
         ctxName << " " << GetString( ctx->name );
     }
-    ctxName << " " << idx;
     return ctxName.str();
 }
 
@@ -5624,13 +5624,14 @@ void Worker::ProcessMessageAppInfo( const QueueMessage& ev )
 
 void Worker::ProcessCpuNewContext( )
 {
-  const uint8_t context_id = 0;
-  ZoneContext * ctx = m_slab.AllocInit<CPUZoneContext>();
-  if (m_defaultCtx == UINT8_MAX) {
-    m_defaultCtx = context_id;
-  }
-  m_data.contexts.push_back(ctx);
-  m_ctxMap[context_id] = ctx;
+    const uint8_t context_id = 0;
+    ZoneContext* ctx = m_slab.AllocInit<CPUZoneContext>();
+    if( m_defaultCtx == UINT8_MAX )
+    {
+        m_defaultCtx = context_id;
+    }
+    m_data.contexts.push_back( ctx );
+    m_ctxMap[context_id] = ctx;
 }
 
 void Worker::ProcessGpuNewContext( const QueueGpuNewContext& ev )
@@ -5679,6 +5680,7 @@ void Worker::ProcessGpuZoneBeginAllocSrcLocImpl( ZoneEvent* zone, const QueueGpu
 {
     assert( m_pendingSourceLocationPayload != 0 );
     zone->SetSrcLoc( m_pendingSourceLocationPayload );
+    //CheckSourceLocation(m_pendingSourceLocationPayload);
     ProcessGpuZoneBeginImplCommon( zone, ev, serial );
     m_pendingSourceLocationPayload = 0;
 }
@@ -5689,6 +5691,13 @@ void Worker::ProcessGpuZoneBeginImplCommon( ZoneEvent* zone, const QueueGpuZoneB
 
     auto ctx = static_cast<GpuCtxData*>(m_ctxMap[ev.context].get());
     assert( ctx );
+
+    uint16_t srcloc = zone->SrcLoc();
+    auto slz = ctx->sourceLocationZones.find( srcloc );
+    if( slz == ctx->sourceLocationZones.end() )
+    {
+        ctx->sourceLocationZones.emplace( srcloc, ZoneContext::SourceLocationZones() );
+    }
 
     int64_t cpuTime;
     if( serial )
