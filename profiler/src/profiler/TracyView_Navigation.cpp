@@ -7,9 +7,8 @@ void View::ZoomToZone( const ZoneEvent& ev )
 {
     const auto end = m_worker.GetZoneEnd( ev );
     if( end - ev.Start() <= 0 ) return;
-    auto p = GetZoneThreadCtx( ev );
-    auto ctx = p.first;
-    auto td = p.second;
+    auto td = GetZoneThreadData( ev );
+    auto ctx = td->ctx;
     if ( !ctx || ctx->type == ZoneContext::CPU)
     {
         ZoomToRange( ev.Start(), end );

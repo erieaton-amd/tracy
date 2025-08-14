@@ -27,7 +27,7 @@ void View::FindZones()
     auto it = m_findZone.match.begin();
     while( it != m_findZone.match.end() )
     {
-        if( m_worker.GetZonesForSourceLocation( *it ).zones.empty() )
+        if( m_worker.GetDefaultCtx().GetZonesForSourceLocation( *it ).zones.empty() )
         {
             it = m_findZone.match.erase( it );
         }
@@ -39,7 +39,7 @@ void View::FindZones()
 }
 #endif
 
-uint64_t View::GetSelectionTarget( const Worker::ZoneThreadData& ev, FindZone::GroupBy groupBy ) const
+uint64_t View::GetSelectionTarget( const ZoneContext::ZoneThreadData& ev, FindZone::GroupBy groupBy ) const
 {
     switch( groupBy )
     {
@@ -230,7 +230,7 @@ void View::DrawZoneList( int id, const Vector<short_ptr<ZoneEvent>>& zones )
                 {
                     ZoomToZone( *ev );
                 }
-                ZoneTooltip( *ev );
+                ZoneTooltip( *ev, *GetZoneThreadData( *ev ) );
                 m_zoneHover2 = ev;
             }
 
@@ -265,7 +265,7 @@ void View::DrawFindZone()
     ImGui::TextWrapped( "Collection of statistical data is disabled in this build." );
     ImGui::TextWrapped( "Rebuild without the TRACY_NO_STATISTICS macro to enable zone search." );
 #else
-    if( !m_worker.AreSourceLocationZonesReady() )
+    if( !m_worker.GetDefaultCtx().AreSourceLocationZonesReady() )
     {
         const auto ty = ImGui::GetTextLineHeight();
         ImGui::PushFont( g_fonts.normal, FontBig );
@@ -379,7 +379,7 @@ void View::DrawFindZone()
             for( auto& v : m_findZone.match )
             {
                 auto& srcloc = m_worker.GetSourceLocation( v );
-                auto& zones = m_worker.GetZonesForSourceLocation( v ).zones;
+                auto& zones = m_worker.GetDefaultCtx().GetZonesForSourceLocation( v ).zones;
                 SmallColorBox( GetSrcLocColor( srcloc, 0 ) );
                 ImGui::SameLine();
                 ImGui::PushID( idx );
@@ -430,7 +430,7 @@ void View::DrawFindZone()
 
         ImGui::Separator();
 
-        auto& zoneData = m_worker.GetZonesForSourceLocation( m_findZone.match[m_findZone.selMatch] );
+        auto& zoneData = m_worker.GetDefaultCtx().GetZonesForSourceLocation( m_findZone.match[m_findZone.selMatch] );
         auto& zones = zoneData.zones;
         zones.ensure_sorted();
         if( ImGui::TreeNodeEx( "Histogram", ImGuiTreeNodeFlags_DefaultOpen ) )

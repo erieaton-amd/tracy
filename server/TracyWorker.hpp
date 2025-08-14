@@ -295,6 +295,7 @@ private:
         ThreadCompress localThreadCompress;
         ThreadCompress externalThreadCompress;
 
+        Vector<Vector<short_ptr<ZoneEvent>>> zoneChildren;
 #ifndef TRACY_NO_STATISTICS
         Vector<Vector<GhostZone>> ghostChildren;
         Vector<GhostKey> ghostFrames;
@@ -494,6 +495,7 @@ public:
     tracy_force_inline const ZoneContext& GetDefaultCtx() const { assert(m_defaultCtx < UINT8_MAX); return *m_ctxMap[m_defaultCtx]; }
     tracy_force_inline ZoneContext& GetDefaultCtx() { assert(m_defaultCtx < UINT8_MAX); return *m_ctxMap[m_defaultCtx]; }
     const Vector<ZoneContext*>& GetCtxData() const { return m_data.contexts; }
+    const std::string GetCtxName( uint8_t idx ) const;
     const Vector<PlotData*>& GetPlots() const { return m_data.plots.Data(); }
     const MemData& GetMemoryNamed( uint64_t name ) const;
     const unordered_flat_map<uint64_t, MemData*>& GetMemNameMap() const { return m_data.memNameMap; }
@@ -529,7 +531,7 @@ public:
     // GetZoneEnd() will try to infer the end time by looking at child zones (parent zone can't end
     //     before its children have ended).
     // GetZoneEndDirect() will only return zone's direct timing data, without looking at children.
-    tracy_force_inline int64_t GetZoneEnd( const ZoneEvent& ev, const ZoneContext& ctx ) const { return ev.IsEndValid() ? ev.End() : GetZoneEndImpl( ev, ctx ); }
+    tracy_force_inline int64_t GetZoneEnd( const ZoneEvent& ev ) const { return ev.IsEndValid() ? ev.End() : GetZoneEndImpl( ev ); }
     static tracy_force_inline int64_t GetZoneEndDirect( const ZoneEvent& ev ) { return ev.IsEndValid() ? ev.End() : ev.Start(); }
 
     uint32_t FindStringIdx( const char* str ) const;
@@ -546,6 +548,8 @@ public:
     const char* GetZoneName( const ZoneEvent& ev ) const;
     const char* GetZoneName( const ZoneEvent& ev, const SourceLocation& srcloc ) const;
 
+    tracy_force_inline const Vector<short_ptr<ZoneEvent>>& GetZoneChildren( int32_t idx ) const { return m_data.zoneChildren[idx]; }
+    tracy_force_inline Vector<short_ptr<ZoneEvent>>& GetZoneChildren( int32_t idx ) { return m_data.zoneChildren[idx]; }
 #ifndef TRACY_NO_STATISTICS
     tracy_force_inline const Vector<GhostZone>& GetGhostChildren( int32_t idx ) const { return m_data.ghostChildren[idx]; }
     tracy_force_inline const GhostKey& GetGhostFrame( const Int24& frame ) const { return m_data.ghostFrames[frame.Val()]; }
@@ -863,16 +867,16 @@ private:
     tracy_force_inline ZoneExtra& AllocZoneExtra( ZoneEvent& ev );
     tracy_force_inline ZoneExtra& RequestZoneExtra( ZoneEvent& ev );
 
-    int64_t GetZoneEndImpl( const ZoneEvent& ev, const ZoneContext& ctx ) const;
+    int64_t GetZoneEndImpl( const ZoneEvent& ev ) const;
 
     void UpdateMbps( int64_t td );
 
     int64_t ReadTimeline( FileRead& f, Vector<short_ptr<ZoneEvent>>& vec, ZoneContext* ctx, uint32_t size, int64_t refTime, int32_t& childIdx );
 
-    tracy_force_inline void WriteTimeline( FileWrite& f, const Vector<short_ptr<ZoneEvent>>& vec, int64_t& refTime, ZoneContext& ctx );
+    tracy_force_inline void WriteTimeline( FileWrite& f, const Vector<short_ptr<ZoneEvent>>& vec, int64_t& refTime );
   //tracy_force_inline void WriteTimeline( FileWrite& f, const Vector<short_ptr<GpuEvent>>& vec, int64_t& refTime, int64_t& refGpuTime );
     template<typename Adapter, typename V>
-    void WriteTimelineImpl( FileWrite& f, const V& vec, int64_t& refTime, ZoneContext& ctx );
+    void WriteTimelineImpl( FileWrite& f, const V& vec, int64_t& refTime );
     template<typename Adapter, typename V>
     void WriteTimelineImpl( FileWrite& f, const V& vec, int64_t& refTime, int64_t& refGpuTime );
 

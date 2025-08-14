@@ -16,7 +16,7 @@ namespace tracy
 
 constexpr float MinVisSize = 3;
 
-void View::BuildFlameGraph( const Worker& worker, std::vector<FlameGraphItem>& data, const Vector<short_ptr<ZoneEvent>>& zones )
+void View::BuildFlameGraph( std::vector<FlameGraphItem>& data, const Vector<short_ptr<ZoneEvent>>& zones )
 {
     FlameGraphItem* cache;
     int16_t last = 0;
@@ -44,8 +44,8 @@ void View::BuildFlameGraph( const Worker& worker, std::vector<FlameGraphItem>& d
                 cache->time += duration;
                 if( v.HasChildren() )
                 {
-                    auto& children = worker.GetZoneChildren( v.Child() );
-                    BuildFlameGraph( worker, cache->children, children );
+                    auto& children = m_worker.GetZoneChildren( v.Child() );
+                    BuildFlameGraph( cache->children, children );
                 }
             }
             else
@@ -56,8 +56,8 @@ void View::BuildFlameGraph( const Worker& worker, std::vector<FlameGraphItem>& d
                     data.emplace_back( FlameGraphItem { srcloc, duration } );
                     if( v.HasChildren() )
                     {
-                        auto& children = worker.GetZoneChildren( v.Child() );
-                        BuildFlameGraph( worker, data.back().children, children );
+                        auto& children = m_worker.GetZoneChildren( v.Child() );
+                        BuildFlameGraph( data.back().children, children );
                     }
                     cache = &data.back();
                 }
@@ -66,8 +66,8 @@ void View::BuildFlameGraph( const Worker& worker, std::vector<FlameGraphItem>& d
                     it->time += duration;
                     if( v.HasChildren() )
                     {
-                        auto& children = worker.GetZoneChildren( v.Child() );
-                        BuildFlameGraph( worker, it->children, children );
+                        auto& children = m_worker.GetZoneChildren( v.Child() );
+                        BuildFlameGraph( it->children, children );
                     }
                     cache = &*it;
                 }
@@ -97,8 +97,8 @@ void View::BuildFlameGraph( const Worker& worker, std::vector<FlameGraphItem>& d
                 cache->time += duration;
                 if( v->HasChildren() )
                 {
-                    auto& children = worker.GetZoneChildren( v->Child() );
-                    BuildFlameGraph( worker, cache->children, children );
+                    auto& children = m_worker.GetZoneChildren( v->Child() );
+                    BuildFlameGraph( cache->children, children );
                 }
             }
             else
@@ -109,8 +109,8 @@ void View::BuildFlameGraph( const Worker& worker, std::vector<FlameGraphItem>& d
                     data.emplace_back( FlameGraphItem { srcloc, duration } );
                     if( v->HasChildren() )
                     {
-                        auto& children = worker.GetZoneChildren( v->Child() );
-                        BuildFlameGraph( worker, data.back().children, children );
+                        auto& children = m_worker.GetZoneChildren( v->Child() );
+                        BuildFlameGraph( data.back().children, children );
                     }
                     cache = &data.back();
                 }
@@ -119,8 +119,8 @@ void View::BuildFlameGraph( const Worker& worker, std::vector<FlameGraphItem>& d
                     it->time += duration;
                     if( v->HasChildren() )
                     {
-                        auto& children = worker.GetZoneChildren( v->Child() );
-                        BuildFlameGraph( worker, it->children, children );
+                        auto& children = m_worker.GetZoneChildren( v->Child() );
+                        BuildFlameGraph( it->children, children );
                     }
                     cache = &*it;
                 }
@@ -130,7 +130,7 @@ void View::BuildFlameGraph( const Worker& worker, std::vector<FlameGraphItem>& d
     }
 }
 
-void View::BuildFlameGraph( const Worker& worker, std::vector<FlameGraphItem>& data, const Vector<short_ptr<ZoneEvent>>& zones, const ContextSwitch* ctx )
+void View::BuildFlameGraph( std::vector<FlameGraphItem>& data, const Vector<short_ptr<ZoneEvent>>& zones, const ContextSwitch* ctx )
 {
     assert( ctx );
     FlameGraphItem* cache;
@@ -159,8 +159,8 @@ void View::BuildFlameGraph( const Worker& worker, std::vector<FlameGraphItem>& d
                 cache->time += duration;
                 if( v.HasChildren() )
                 {
-                    auto& children = worker.GetZoneChildren( v.Child() );
-                    BuildFlameGraph( worker, cache->children, children, ctx );
+                    auto& children = m_worker.GetZoneChildren( v.Child() );
+                    BuildFlameGraph( cache->children, children, ctx );
                 }
             }
             else
@@ -171,8 +171,8 @@ void View::BuildFlameGraph( const Worker& worker, std::vector<FlameGraphItem>& d
                     data.emplace_back( FlameGraphItem { srcloc, duration } );
                     if( v.HasChildren() )
                     {
-                        auto& children = worker.GetZoneChildren( v.Child() );
-                        BuildFlameGraph( worker, data.back().children, children, ctx );
+                        auto& children = m_worker.GetZoneChildren( v.Child() );
+                        BuildFlameGraph( data.back().children, children, ctx );
                     }
                     cache = &data.back();
                 }
@@ -181,8 +181,8 @@ void View::BuildFlameGraph( const Worker& worker, std::vector<FlameGraphItem>& d
                     it->time += duration;
                     if( v.HasChildren() )
                     {
-                        auto& children = worker.GetZoneChildren( v.Child() );
-                        BuildFlameGraph( worker, it->children, children, ctx );
+                        auto& children = m_worker.GetZoneChildren( v.Child() );
+                        BuildFlameGraph( it->children, children, ctx );
                     }
                     cache = &*it;
                 }
@@ -212,8 +212,8 @@ void View::BuildFlameGraph( const Worker& worker, std::vector<FlameGraphItem>& d
                 cache->time += duration;
                 if( v->HasChildren() )
                 {
-                    auto& children = worker.GetZoneChildren( v->Child() );
-                    BuildFlameGraph( worker, cache->children, children, ctx );
+                    auto& children = m_worker.GetZoneChildren( v->Child() );
+                    BuildFlameGraph( cache->children, children, ctx );
                 }
             }
             else
@@ -224,8 +224,8 @@ void View::BuildFlameGraph( const Worker& worker, std::vector<FlameGraphItem>& d
                     data.emplace_back( FlameGraphItem { srcloc, duration } );
                     if( v->HasChildren() )
                     {
-                        auto& children = worker.GetZoneChildren( v->Child() );
-                        BuildFlameGraph( worker, data.back().children, children, ctx );
+                        auto& children = m_worker.GetZoneChildren( v->Child() );
+                        BuildFlameGraph( data.back().children, children, ctx );
                     }
                     cache = &data.back();
                 }
@@ -234,8 +234,8 @@ void View::BuildFlameGraph( const Worker& worker, std::vector<FlameGraphItem>& d
                     it->time += duration;
                     if( v->HasChildren() )
                     {
-                        auto& children = worker.GetZoneChildren( v->Child() );
-                        BuildFlameGraph( worker, it->children, children, ctx );
+                        auto& children = m_worker.GetZoneChildren( v->Child() );
+                        BuildFlameGraph( it->children, children, ctx );
                     }
                     cache = &*it;
                 }
@@ -798,7 +798,7 @@ void View::DrawFlameGraph()
         ToggleButton( ICON_FA_RULER " Limits", m_showRanges );
     }
 
-    auto& td = m_worker.GetThreadData();
+    auto& td = m_worker.GetDefaultCtx().threads;
     auto expand = ImGui::TreeNode( ICON_FA_SHUFFLE " Visible threads:" );
     ImGui::SameLine();
     size_t visibleThreads = 0;
@@ -883,14 +883,14 @@ void View::DrawFlameGraph()
                         if( ctx )
                         {
                             m_td.Queue( [this, idx, ctx, thread, &threadData] {
-                                BuildFlameGraph( m_worker, threadData[idx], thread->timeline, ctx );
+                                BuildFlameGraph( threadData[idx], thread->timeline, ctx );
                             } );
                         }
                     }
                     else
                     {
                         m_td.Queue( [this, idx, thread, &threadData] {
-                            BuildFlameGraph( m_worker, threadData[idx], thread->timeline );
+                            BuildFlameGraph( threadData[idx], thread->timeline );
                         } );
                     }
                     idx++;

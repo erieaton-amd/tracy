@@ -985,8 +985,8 @@ Worker::Worker( FileRead& f, EventType::Type eventMask, bool bgTasks, bool allow
     s_loadProgress.subTotal.store( sz, std::memory_order_relaxed );
     s_loadProgress.subProgress.store( 0, std::memory_order_relaxed );
     f.Read( sz );
-    GetDefaultCtx().zoneChildren.reserve_exact( sz, m_slab );
-    memset( (char*)GetDefaultCtx().zoneChildren.data(), 0, sizeof( Vector<short_ptr<ZoneEvent>> ) * sz );
+    m_data.zoneChildren.reserve_exact( sz, m_slab );
+    memset( (char*)m_data.zoneChildren.data(), 0, sizeof( Vector<short_ptr<ZoneEvent>> ) * sz );
     int32_t childIdx = 0;
     f.Read( sz );
     GetDefaultCtx().threadData.reserve(sz);
@@ -1087,11 +1087,6 @@ Worker::Worker( FileRead& f, EventType::Type eventMask, bool bgTasks, bool allow
     for( uint64_t i=0; i<sz; i++ )
     {
         auto ctx = m_slab.AllocInit<GpuCtxData>();
-
-        f.Read( sz );
-        ctx->zoneChildren.reserve_exact( sz, m_slab );
-        memset( (char*)ctx->zoneChildren.data(), 0, sizeof( Vector<short_ptr<ZoneEvent>> ) * sz );
-        childIdx = 0;
 
         uint8_t calibration;
         f.Read7( ctx->thread, calibration, ctx->count, ctx->period, ctx->type, ctx->name, ctx->overflow );
@@ -1722,7 +1717,7 @@ Worker::Worker( FileRead& f, EventType::Type eventMask, bool bgTasks, bool allow
                     if( zone.HasChildren() )
                     {
                         countMap[uint16_t(zone.SrcLoc())]++;
-                        ProcessTimeline( countMap, ctx->GetZoneChildren( zone.Child() ), thread, ctx );
+                        ProcessTimeline( countMap, GetZoneChildren( zone.Child() ), thread, ctx );
                         countMap[uint16_t(zone.SrcLoc())]--;
                     }
                 }
@@ -1947,10 +1942,6 @@ Worker::~Worker()
 #endif
             }
         }
-        for( auto& zc : v->zoneChildren )
-        {
-          zc.~Vector();
-        }
     }
     for( auto& v : m_data.plots.Data() )
     {
@@ -1963,6 +1954,10 @@ Worker::~Worker()
     for( auto& v : m_data.lockMap )
     {
         v.second->~LockMap();
+    }
+    for( auto& zc : m_data.zoneChildren )
+    {
+      zc.~Vector();
     }
     for( auto& v : m_data.memNameMap )
     {
@@ -2327,14 +2322,14 @@ const uint64_t* Worker::GetInlineSymbolList( uint64_t sym, uint32_t len )
     return it;
 }
 
-int64_t Worker::GetZoneEndImpl( const ZoneEvent& ev, const ZoneContext& ctx ) const
+int64_t Worker::GetZoneEndImpl( const ZoneEvent& ev ) const
 {
     assert( !ev.IsEndValid() );
     auto ptr = &ev;
     for(;;)
     {
         if( !ptr->HasChildren() ) return ptr->Start() >= 0 ? ptr->Start() : m_data.lastTime;
-        auto& children = ctx.GetZoneChildren( ptr->Child() );
+        auto& children = GetZoneChildren( ptr->Child() );
         if( children.is_magic() )
         {
             auto& c = *(Vector<ZoneEvent>*)&children;
@@ -3421,6 +3416,30 @@ ThreadData* Worker::GetCurrentThreadData()
     return td;
 }
 
+const std::string Worker::GetCtxName( uint8_t idx ) const
+{
+    auto ctx = m_data.contexts[idx];
+    std::stringstream ctxName;
+    if( ctx->type == ZoneContext::CPU )
+    {
+        ctxName << "CPU";
+    }
+    else if( ctx->type == ZoneContext::GPU )
+    {
+        ctxName << "GPU";
+    }
+    else
+    {
+        ctxName << "CTX";
+    }
+    if( ctx->name.Active() )
+    {
+        ctxName << " " << GetString( ctx->name );
+    }
+    ctxName << " " << idx;
+    return ctxName.str();
+}
+
 const MemData& Worker::GetMemoryNamed( uint64_t name ) const
 {
     auto it = m_data.memNameMap.find( name );
@@ -3457,7 +3476,6 @@ void Worker::NewZone( ZoneEvent* zone )
     m_data.zonesCnt++;
 
     auto td = GetCurrentThreadData();
-    auto& zoneChildren = td->ctx->zoneChildren;
     td->count++;
     td->IncStackCount( zone->SrcLoc() );
     const auto ssz = td->stack.size();
@@ -3471,10 +3489,10 @@ void Worker::NewZone( ZoneEvent* zone )
         auto& back = td->stack.data()[ssz-1];
         if( !back->HasChildren() )
         {
-            back->SetChild( int32_t( zoneChildren.size() ) );
+            back->SetChild( int32_t( m_data.zoneChildren.size() ) );
             if( m_data.zoneVectorCache.empty() )
             {
-                zoneChildren.push_back( Vector<short_ptr<ZoneEvent>>( zone ) );
+                m_data.zoneChildren.push_back( Vector<short_ptr<ZoneEvent>>( zone ) );
             }
             else
             {
@@ -3482,14 +3500,14 @@ void Worker::NewZone( ZoneEvent* zone )
                 assert( !vze.empty() );
                 vze.clear();
                 vze.push_back_non_empty( zone );
-                zoneChildren.push_back( std::move( vze ) );
+                m_data.zoneChildren.push_back( std::move( vze ) );
             }
         }
         else
         {
             const auto backChild = back->Child();
-            assert( !zoneChildren[backChild].empty() );
-            zoneChildren[backChild].push_back_non_empty( zone );
+            assert( !m_data.zoneChildren[backChild].empty() );
+            m_data.zoneChildren[backChild].push_back_non_empty( zone );
         }
         td->stack.push_back_non_empty( zone );
     }
@@ -4803,7 +4821,7 @@ void Worker::ProcessZoneEnd( const QueueZoneEnd& ev )
 
     if( zone->HasChildren() )
     {
-        auto& childVec = td->ctx->zoneChildren[zone->Child()];
+        auto& childVec = m_data.zoneChildren[zone->Child()];
         const auto sz = childVec.size();
         if( sz <= 8 * 1024 )
         {
@@ -5717,6 +5735,7 @@ void Worker::ProcessGpuZoneBeginImplCommon( ZoneEvent* zone, const QueueGpuZoneB
         td = ctx->threadData.emplace( ztid, m_slab.AllocInit<ThreadData>() ).first;
         ctx->threads.push_back( td->second );
         td->second->ctx = ctx;
+        td->second->id = ztid;
     }
     auto timeline = &td->second->timeline;
     auto& stack = td->second->stack;
@@ -5725,10 +5744,10 @@ void Worker::ProcessGpuZoneBeginImplCommon( ZoneEvent* zone, const QueueGpuZoneB
         auto back = stack.back();
         if( back->Child() < 0 )
         {
-            back->SetChild( int32_t( ctx->zoneChildren.size() ) );
-            ctx->zoneChildren.push_back( Vector<short_ptr<ZoneEvent>>() );
+            back->SetChild( int32_t( m_data.zoneChildren.size() ) );
+            m_data.zoneChildren.push_back( Vector<short_ptr<ZoneEvent>>() );
         }
-        timeline = &ctx->zoneChildren[back->Child()];
+        timeline = &m_data.zoneChildren[back->Child()];
     }
 
     timeline->push_back( zone );
@@ -7559,7 +7578,7 @@ int64_t Worker::ReadTimelineHaveSize( FileRead& f, ZoneEvent* zone, ZoneContext*
         const auto idx = childIdx;
         childIdx++;
         zone->SetChild( idx );
-        return ReadTimeline( f, ctx->zoneChildren[idx], ctx, sz, refTime, childIdx );
+        return ReadTimeline( f, m_data.zoneChildren[idx], ctx, sz, refTime, childIdx );
     }
 }
 
@@ -7594,7 +7613,7 @@ void Worker::ReconstructZoneStatistics( uint8_t* countMap, ZoneEvent& zone, Zone
 
         if( zone.HasChildren() )
         {
-            auto& children = ctx.GetZoneChildren( zone.Child() );
+            auto& children = GetZoneChildren( zone.Child() );
             assert( children.is_magic() );
             auto& c = *(Vector<ZoneEvent>*)( &children );
             for( auto& v : c )
@@ -7929,7 +7948,7 @@ void Worker::Write( FileWrite& f, bool fiDict )
     sz = 0;
     for( auto& v : GetDefaultCtx().threads ) sz += v->count;
     f.Write( &sz, sizeof( sz ) );
-    sz = GetDefaultCtx().zoneChildren.size();
+    sz = m_data.zoneChildren.size();
     f.Write( &sz, sizeof( sz ) );
     sz = GetDefaultCtx().threads.size();
     f.Write( &sz, sizeof( sz ) );
@@ -7942,7 +7961,7 @@ void Worker::Write( FileWrite& f, bool fiDict )
         f.Write( &thread->kernelSampleCnt, sizeof( thread->kernelSampleCnt ) );
         f.Write( &thread->isFiber, sizeof( thread->isFiber ) );
         f.Write( &thread->groupHint, sizeof( thread->groupHint ) );
-        WriteTimeline( f, thread->timeline, refTime, GetDefaultCtx() );
+        WriteTimeline( f, thread->timeline, refTime );
         sz = thread->messages.size();
         f.Write( &sz, sizeof( sz ) );
         for( auto& v : thread->messages )
@@ -7983,9 +8002,6 @@ void Worker::Write( FileWrite& f, bool fiDict )
     f.Write( &sz, sizeof( sz ) );
     for( auto& cntx : m_data.contexts )
     {
-        sz = cntx->zoneChildren.size();
-        f.Write( &sz, sizeof( sz ) );
-
         if (cntx->type != ZoneContext::GPU) continue;
         auto ctx = static_cast<GpuCtxData*>(cntx);
         f.Write( &ctx->thread, sizeof( ctx->thread ) );
@@ -8011,7 +8027,7 @@ void Worker::Write( FileWrite& f, bool fiDict )
             int64_t refGpuTime = 0;
             uint64_t tid = td.first;
             f.Write( &tid, sizeof( tid ) );
-            WriteTimeline( f, td.second->timeline, refTime, *cntx );
+            WriteTimeline( f, td.second->timeline, refTime );
         }
 
         sz = ctx->notes.size();
@@ -8327,22 +8343,22 @@ void Worker::Write( FileWrite& f, bool fiDict )
     }
 }
 
-void Worker::WriteTimeline( FileWrite& f, const Vector<short_ptr<ZoneEvent>>& vec, int64_t& refTime, ZoneContext& ctx )
+void Worker::WriteTimeline( FileWrite& f, const Vector<short_ptr<ZoneEvent>>& vec, int64_t& refTime )
 {
     uint32_t sz = uint32_t( vec.size() );
     f.Write( &sz, sizeof( sz ) );
     if( vec.is_magic() )
     {
-        WriteTimelineImpl<VectorAdapterDirect<ZoneEvent>>( f, *(Vector<ZoneEvent>*)( &vec ), refTime, ctx );
+        WriteTimelineImpl<VectorAdapterDirect<ZoneEvent>>( f, *(Vector<ZoneEvent>*)( &vec ), refTime );
     }
     else
     {
-        WriteTimelineImpl<VectorAdapterPointer<ZoneEvent>>( f, vec, refTime, ctx );
+        WriteTimelineImpl<VectorAdapterPointer<ZoneEvent>>( f, vec, refTime );
     }
 }
 
 template<typename Adapter, typename V>
-void Worker::WriteTimelineImpl( FileWrite& f, const V& vec, int64_t& refTime, ZoneContext& ctx )
+void Worker::WriteTimelineImpl( FileWrite& f, const V& vec, int64_t& refTime )
 {
     Adapter a;
     for( auto& val : vec )
@@ -8360,7 +8376,7 @@ void Worker::WriteTimelineImpl( FileWrite& f, const V& vec, int64_t& refTime, Zo
         }
         else
         {
-            WriteTimeline( f, ctx.GetZoneChildren( v.Child() ), refTime, ctx );
+            WriteTimeline( f, GetZoneChildren( v.Child() ), refTime );
         }
         WriteTimeOffset( f, refTime, v.End() );
     }

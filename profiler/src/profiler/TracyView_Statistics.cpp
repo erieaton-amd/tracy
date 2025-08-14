@@ -45,7 +45,27 @@ void View::DrawStatistics()
     ImGui::TextWrapped( "Collection of statistical data is disabled in this build." );
     ImGui::TextWrapped( "Rebuild without the TRACY_NO_STATISTICS macro to enable statistics view." );
 #else
-    if( !m_worker.AreSourceLocationZonesReady() && ( !m_worker.AreCallstackSamplesReady() || m_worker.GetCallstackSampleCount() == 0 ) )
+    auto& ctxs = m_worker.GetCtxData();
+    if( m_statCtxName.empty() )
+    {
+        m_statCtxName = m_worker.GetCtxName( m_statCtx );
+    }
+    if( ImGui::BeginCombo( "##zonestatsctx", m_statCtxName.c_str() ) )
+    {
+        for( uint8_t i = 0; i < ctxs.size(); i++ )
+        {
+            std::string ctxName = m_worker.GetCtxName( i );
+            if( ImGui::Selectable( ctxName.c_str() ) )
+            {
+                m_statCtx = i;
+                m_statCtxName = ctxName;
+            }
+        }
+        ImGui::EndCombo();
+    }
+    auto ctx = ctxs[m_statCtx];
+
+    if( !ctx->AreSourceLocationZonesReady() && ( !m_worker.AreCallstackSamplesReady() || m_worker.GetCallstackSampleCount() == 0 ) )
     {
         const auto ty = ImGui::GetTextLineHeight();
         ImGui::PushFont( g_fonts.normal, FontBig );
@@ -78,13 +98,6 @@ void View::DrawStatistics()
             ImGui::RadioButton( ICON_FA_PUZZLE_PIECE " Symbols", &m_statMode, 1 );
         }
     }
-    if( m_worker.GetGpuZoneCount() > 0 )
-    {
-        ImGui::SameLine();
-        ImGui::Spacing();
-        ImGui::SameLine();
-        ImGui::RadioButton( ICON_FA_EYE " GPU", &m_statMode, 2 );
-    }
     ImGui::SameLine();
     ImGui::Spacing();
     ImGui::SameLine();
@@ -99,7 +112,7 @@ void View::DrawStatistics()
     bool copySrclocsToClipboard = false;
     if( m_statMode == 0 )
     {
-        if( !m_worker.AreSourceLocationZonesReady() )
+        if( !ctx->AreSourceLocationZonesReady() )
         {
             ImGui::Spacing();
             ImGui::Separator();
@@ -111,7 +124,7 @@ void View::DrawStatistics()
         }
 
         const auto filterActive = m_statisticsFilter.IsActive();
-        auto& slz = m_worker.GetSourceLocationZones();
+        auto& slz = ctx->GetSourceLocationZones();
         srcloc.reserve( slz.size() );
         uint32_t slzcnt = 0;
         if( m_statRange.active )
@@ -321,6 +334,7 @@ void View::DrawStatistics()
     }
     else
     {
+      assert(0);
       /*
         assert( m_statMode == 2 );
         if( !m_worker.AreGpuSourceLocationZonesReady() )

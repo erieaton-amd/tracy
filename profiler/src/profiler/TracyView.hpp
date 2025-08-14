@@ -256,11 +256,11 @@ private:
     void DrawSampleList( const TimelineContext& ctx, const std::vector<SamplesDraw>& drawList, const Vector<SampleData>& vec, int offset );
     void DrawZoneList( const TimelineContext& ctx, const std::vector<TimelineDraw>& drawList, int offset, const ThreadData& thread );
     void DrawContextSwitchList( const TimelineContext& ctx, const std::vector<ContextSwitchDraw>& drawList, const Vector<ContextSwitchData>& ctxSwitch, int offset, int endOffset, bool isFiber );
-    int DispatchGpuZoneLevel( const Vector<short_ptr<ZoneEvent>>& vec, bool hover, double pxns, int64_t nspx, const ImVec2& wpos, int offset, int depth, uint64_t thread, float yMin, float yMax, int64_t begin, int drift );
+    int DispatchGpuZoneLevel( const Vector<short_ptr<ZoneEvent>>& vec, bool hover, double pxns, int64_t nspx, const ImVec2& wpos, int offset, int depth, const ThreadData& thread, float yMin, float yMax, int64_t begin, int drift );
     template<typename Adapter, typename V>
-    int DrawGpuZoneLevel( const V& vec, bool hover, double pxns, int64_t nspx, const ImVec2& wpos, int offset, int depth, uint64_t thread, float yMin, float yMax, int64_t begin, int drift );
+    int DrawGpuZoneLevel( const V& vec, bool hover, double pxns, int64_t nspx, const ImVec2& wpos, int offset, int depth, const ThreadData& thread, float yMin, float yMax, int64_t begin, int drift );
     template<typename Adapter, typename V>
-    int SkipGpuZoneLevel( const V& vec, bool hover, double pxns, int64_t nspx, const ImVec2& wpos, int offset, int depth, uint64_t thread, float yMin, float yMax, int64_t begin, int drift );
+    int SkipGpuZoneLevel( const V& vec, bool hover, double pxns, int64_t nspx, const ImVec2& wpos, int offset, int depth, const ThreadData& thread, float yMin, float yMax, int64_t begin, int drift );
     void DrawLockHeader( uint32_t id, const LockMap& lockmap, const SourceLocation& srcloc, bool hover, ImDrawList* draw, const ImVec2& wpos, float w, float ty, float offset, uint8_t tid );
     int DrawLocks( const TimelineContext& ctx, const std::vector<std::unique_ptr<LockDraw>>& lockDraw, uint64_t tid, int _offset, LockHighlight& highlight );
     void DrawPlotPoint( const ImVec2& wpos, float x, float y, int offset, uint32_t color, bool hover, bool hasPrev, const PlotItem& item, double prev, PlotType type, PlotValueFormatting format, float PlotHeight, uint64_t name );
@@ -294,8 +294,8 @@ private:
     void DrawFlameGraphHeader( uint64_t timespan );
     void DrawFlameGraphLevel( const std::vector<FlameGraphItem>& data, FlameGraphContext& ctx, int depth, bool samples );
     void DrawFlameGraphItem( const FlameGraphItem& item, FlameGraphContext& ctx, int depth, bool samples );
-    void BuildFlameGraph( const Worker& worker, std::vector<FlameGraphItem>& data, const Vector<short_ptr<ZoneEvent>>& zones );
-    void BuildFlameGraph( const Worker& worker, std::vector<FlameGraphItem>& data, const Vector<short_ptr<ZoneEvent>>& zones, const ContextSwitch* ctx );
+    void BuildFlameGraph( std::vector<FlameGraphItem>& data, const Vector<short_ptr<ZoneEvent>>& zones );
+    void BuildFlameGraph( std::vector<FlameGraphItem>& data, const Vector<short_ptr<ZoneEvent>>& zones, const ContextSwitch* ctx );
     void BuildFlameGraph( const Worker& worker, std::vector<FlameGraphItem>& data, const Vector<SampleData>& samples );
 
     void ListMemData( std::vector<const MemEvent*>& vec, const std::function<void(const MemEvent*)>& DrawAddress, int64_t startTime = -1, uint64_t pool = 0 );
@@ -319,7 +319,7 @@ private:
     void DrawGpuInfoWindow();
 
     template<typename Adapter, typename V>
-    void DrawZoneInfoChildren( const V& children, int64_t ztime );
+    void DrawZoneInfoChildren( const V& children, int64_t ztime, const ThreadData& thread );
     template<typename Adapter, typename V>
     void DrawGpuInfoChildren( const V& children, int64_t ztime );
 
@@ -356,12 +356,12 @@ private:
     const ZoneEvent* GetZoneParent( const ZoneEvent& zone, uint64_t tid ) const;
     const ZoneEvent* GetZoneChild( const ZoneEvent& zone, int64_t time ) const;
     bool IsZoneReentry( const ZoneEvent& zone ) const;
-    bool IsZoneReentry( const ZoneEvent& zone, uint64_t tid ) const;
+    bool IsZoneReentry( const ZoneEvent& zone, uint64_t tid, const ZoneContext* ctx ) const;
   //const GpuEvent* GetZoneParent( const GpuEvent& zone ) const;
     const ThreadData* GetZoneThreadData( const ZoneEvent& zone ) const;
     const ZoneContext* GetZoneCtx( const ZoneEvent& zone ) const;
     bool FindMatchingZone( int prev0, int prev1, int flags );
-    const ZoneEvent* FindZoneAtTime( uint64_t thread, int64_t time ) const;
+    const pair<const ZoneEvent*, const ThreadData*> FindZoneAtTime( uint64_t thread, int64_t time ) const;
     uint64_t GetFrameNumber( const FrameData& fd, int i ) const;
     const char* GetFrameText( const FrameData& fd, int i, uint64_t ftime ) const;
     const char* GetFrameSetName( const FrameData& fd ) const;
@@ -508,7 +508,7 @@ private:
     ImGuiTextFilter m_statisticsFilter;
     ImGuiTextFilter m_statisticsImageFilter;
     ImGuiTextFilter m_userTextFilter;
-    unordered_flat_set<Worker::ZoneThreadData*> m_filteredZones;
+    unordered_flat_set<ZoneContext::ZoneThreadData*> m_filteredZones;
 
     Region m_highlight;
     Region m_highlightZoom;
@@ -529,6 +529,8 @@ private:
     bool m_showFlameGraph = false;
 
     AccumulationMode m_statAccumulationMode = AccumulationMode::SelfOnly;
+    std::string m_statCtxName;
+    uint8_t m_statCtx = 0;
     bool m_statSampleTime = true;
     int m_statMode = 0;
     bool m_shortImageNames = true;
@@ -779,7 +781,7 @@ private:
         }
     } m_findZone;
 
-    tracy_force_inline uint64_t GetSelectionTarget( const Worker::ZoneThreadData& ev, FindZone::GroupBy groupBy ) const;
+    tracy_force_inline uint64_t GetSelectionTarget( const ZoneContext::ZoneThreadData& ev, FindZone::GroupBy groupBy ) const;
 
     struct CompVal
     {

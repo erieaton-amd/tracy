@@ -129,11 +129,13 @@ View::ZoneColorData View::GetZoneColorData( const ZoneEvent& ev, uint64_t thread
     return ret;
 }
 
-const ZoneEvent* View::FindZoneAtTime( uint64_t thread, int64_t time ) const
+const pair<const ZoneEvent*, const ThreadData*> View::FindZoneAtTime( uint64_t thread, int64_t time ) const
 {
+  for( const auto ctx : m_worker.GetCtxData() )
+  {
     // TODO add thread rev-map
     ThreadData* td = nullptr;
-    for( const auto& t : m_worker.GetThreadData() )
+    for( const auto& t : ctx->threads )
     {
         if( t->id == thread )
         {
@@ -141,10 +143,10 @@ const ZoneEvent* View::FindZoneAtTime( uint64_t thread, int64_t time ) const
             break;
         }
     }
-    if( !td ) return nullptr;
+    if( !td ) return { nullptr, nullptr };
 
     const Vector<short_ptr<ZoneEvent>>* timeline = &td->timeline;
-    if( timeline->empty() ) return nullptr;
+    if( timeline->empty() ) return { nullptr, nullptr };
     const ZoneEvent* ret = nullptr;
     for(;;)
     {
@@ -153,21 +155,22 @@ const ZoneEvent* View::FindZoneAtTime( uint64_t thread, int64_t time ) const
             auto vec = (Vector<ZoneEvent>*)timeline;
             auto it = std::upper_bound( vec->begin(), vec->end(), time, [] ( const auto& l, const auto& r ) { return l < r.Start(); } );
             if( it != vec->begin() ) --it;
-            if( it->Start() > time || ( it->IsEndValid() && it->End() < time ) ) return ret;
+            if( it->Start() > time || ( it->IsEndValid() && it->End() < time ) ) return { ret, td };
             ret = it;
-            if( !it->HasChildren() ) return ret;
+            if( !it->HasChildren() ) return { ret, td };
             timeline = &m_worker.GetZoneChildren( it->Child() );
         }
         else
         {
             auto it = std::upper_bound( timeline->begin(), timeline->end(), time, [] ( const auto& l, const auto& r ) { return l < r->Start(); } );
             if( it != timeline->begin() ) --it;
-            if( (*it)->Start() > time || ( (*it)->IsEndValid() && (*it)->End() < time ) ) return ret;
+            if( (*it)->Start() > time || ( (*it)->IsEndValid() && (*it)->End() < time ) ) return { ret, td };
             ret = *it;
-            if( !(*it)->HasChildren() ) return ret;
+            if( !(*it)->HasChildren() ) return { ret, td };
             timeline = &m_worker.GetZoneChildren( (*it)->Child() );
         }
     }
+  }
 }
 
 const ZoneEvent* View::GetZoneChild( const ZoneEvent& zone, int64_t time ) const
@@ -226,7 +229,7 @@ const ZoneEvent* View::GetZoneParent( const ZoneEvent& zone ) const
                     if( it == &zone ) return parent;
                     if( !it->HasChildren() ) break;
                     parent = it;
-                    timeline = &ctx->GetZoneChildren( parent->Child() );
+                    timeline = &m_worker.GetZoneChildren( parent->Child() );
                 }
                 else
                 {
@@ -236,7 +239,7 @@ const ZoneEvent* View::GetZoneParent( const ZoneEvent& zone ) const
                     if( *it == &zone ) return parent;
                     if( !( *it )->HasChildren() ) break;
                     parent = *it;
-                    timeline = &ctx->GetZoneChildren( parent->Child() );
+                    timeline = &m_worker.GetZoneChildren( parent->Child() );
                 }
             }
         }
@@ -263,7 +266,7 @@ const ZoneEvent* View::GetZoneParent( const ZoneEvent& zone, uint64_t tid ) cons
                 if( it == &zone ) return parent;
                 if( !it->HasChildren() ) break;
                 parent = it;
-                timeline = &ctx->GetZoneChildren( parent->Child() );
+                timeline = &m_worker.GetZoneChildren( parent->Child() );
             }
             else
             {
@@ -273,7 +276,7 @@ const ZoneEvent* View::GetZoneParent( const ZoneEvent& zone, uint64_t tid ) cons
                 if( *it == &zone ) return parent;
                 if( !( *it )->HasChildren() ) break;
                 parent = *it;
-                timeline = &ctx->GetZoneChildren( parent->Child() );
+                timeline = &m_worker.GetZoneChildren( parent->Child() );
             }
         }
     }
@@ -282,22 +285,24 @@ const ZoneEvent* View::GetZoneParent( const ZoneEvent& zone, uint64_t tid ) cons
 
 bool View::IsZoneReentry( const ZoneEvent& zone ) const
 {
+  for( const auto& ctx : m_worker.GetCtxData() )
+  {
 #ifndef TRACY_NO_STATISTICS
-    if( m_worker.AreSourceLocationZonesReady() )
+    if( ctx->AreSourceLocationZonesReady() )
     {
-        auto& slz = m_worker.GetZonesForSourceLocation( zone.SrcLoc() );
+        auto& slz = ctx->GetZonesForSourceLocation( zone.SrcLoc() );
         if( !slz.zones.empty() && slz.zones.is_sorted() )
         {
             auto it = std::lower_bound( slz.zones.begin(), slz.zones.end(), zone.Start(), [] ( const auto& lhs, const auto& rhs ) { return lhs.Zone()->Start() < rhs; } );
             if( it != slz.zones.end() && it->Zone() == &zone )
             {
-                return IsZoneReentry( zone, m_worker.DecompressThread( it->Thread() ) );
+                return IsZoneReentry( zone, m_worker.DecompressThread( it->Thread() ), ctx );
             }
         }
     }
 #endif
 
-    for( const auto& thread : m_worker.GetThreadData() )
+    for( const auto& thread : ctx->threads )
     {
         const ZoneEvent* parent = nullptr;
         const Vector<short_ptr<ZoneEvent>>* timeline = &thread->timeline;
@@ -330,11 +335,12 @@ bool View::IsZoneReentry( const ZoneEvent& zone ) const
         }
     }
     return false;
+  }
 }
 
-bool View::IsZoneReentry( const ZoneEvent& zone, uint64_t tid ) const
+bool View::IsZoneReentry( const ZoneEvent& zone, uint64_t tid, const ZoneContext* ctx ) const
 {
-    const auto thread = m_worker.GetThreadData( tid );
+    const auto thread = ctx->GetThreadData( tid );
     const ZoneEvent* parent = nullptr;
     const Vector<short_ptr<ZoneEvent>>* timeline = &thread->timeline;
     if( timeline->empty() ) return false;
@@ -381,7 +387,7 @@ const ThreadData* View::GetZoneThreadData( const ZoneEvent& zone ) const
                 auto it = std::lower_bound( slz.zones.begin(), slz.zones.end(), zone.Start(), []( const auto& lhs, const auto& rhs ) { return lhs.Zone()->Start() < rhs; } );
                 if( it != slz.zones.end() && it->Zone() == &zone )
                 {
-                    return { ctx, m_worker.GetThreadData( m_worker.DecompressThread( it->Thread() ) ) };
+                    return ctx->GetThreadData( m_worker.DecompressThread( it->Thread() ) );
                 }
             }
         }
@@ -401,7 +407,7 @@ const ThreadData* View::GetZoneThreadData( const ZoneEvent& zone ) const
                     if( zone.End() >= 0 && it->Start() > zone.End() ) break;
                     if( it == &zone ) return td.second;
                     if( it->Child() < 0 ) break;
-                    timeline = &ctx->GetZoneChildren( it->Child() );
+                    timeline = &m_worker.GetZoneChildren( it->Child() );
                 }
                 else
                 {
@@ -410,7 +416,7 @@ const ThreadData* View::GetZoneThreadData( const ZoneEvent& zone ) const
                     if( zone.End() >= 0 && (*it)->Start() > zone.End() ) break;
                     if( *it == &zone ) return td.second;
                     if( (*it)->Child() < 0 ) break;
-                    timeline = &ctx->GetZoneChildren( (*it)->Child() );
+                    timeline = &m_worker.GetZoneChildren( (*it)->Child() );
                 }
             }
         }

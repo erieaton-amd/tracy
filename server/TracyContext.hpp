@@ -100,14 +100,11 @@ public:
     uint64_t count;
     unordered_flat_map<int64_t, StringIdx> noteNames;
     unordered_flat_map<uint16_t, unordered_flat_map<int64_t, double>> notes;
-    Vector<Vector<short_ptr<ZoneEvent>>> zoneChildren;
 
     uint64_t threadCtx = 0;
     ThreadData* threadCtxData = nullptr;
     int64_t refTimeThread = 0;
 
-    tracy_force_inline const Vector<short_ptr<ZoneEvent>>& GetZoneChildren( int32_t idx ) const { return zoneChildren[idx]; }
-    tracy_force_inline Vector<short_ptr<ZoneEvent>>& GetZoneChildren( int32_t idx ) { return zoneChildren[idx]; }
     const ThreadData* GetThreadData( uint64_t tid ) const;
 
     SourceLocationZones& GetZonesForSourceLocation( int16_t srcloc );
