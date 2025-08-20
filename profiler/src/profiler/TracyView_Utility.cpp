@@ -251,7 +251,9 @@ const ZoneEvent* View::GetZoneParent( const ZoneEvent& zone, uint64_t tid ) cons
 {
     for( const auto& ctx : m_worker.GetCtxData() )
     {
-        const auto thread = ctx->threadData.at( tid );
+        auto it = ctx->threadData.find( tid );
+        if( it == ctx->threadData.end() ) continue;
+        const auto thread = it->second;
         const ZoneEvent* parent = nullptr;
         const Vector<short_ptr<ZoneEvent>>* timeline = &thread->timeline;
         if( timeline->empty() ) return nullptr;

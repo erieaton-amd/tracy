@@ -56,7 +56,7 @@ static bool SourceFileValid( const char* fn, uint64_t olderThan )
 static const uint8_t FileHeader[8] { 't', 'r', 'a', 'c', 'y', Version::Major, Version::Minor, Version::Patch };
 enum { FileHeaderMagic = 5 };
 static const int CurrentVersion = FileVersion( Version::Major, Version::Minor, Version::Patch );
-static const int MinSupportedVersion = FileVersion( 0, 9, 0 );
+static const int MinSupportedVersion = FileVersion( 0, 13, 0 );
 
 
 static void UpdateLockCountLockable( LockMap& lockmap, size_t pos )
@@ -546,7 +546,6 @@ Worker::Worker( const char* name, const char* program, const std::vector<ImportE
         m_data.framesBase->frames.push_back( FrameEvent{ 0, -1, -1 } );
         m_data.framesBase->frames.push_back( FrameEvent{ 0, -1, -1 } );
     }
-    fprintf(stderr, "zone size %lu\n", sizeof(tracy::ZoneEvent));
 }
 
 Worker::Worker( FileRead& f, EventType::Type eventMask, bool bgTasks, bool allowStringModification )
@@ -630,7 +629,27 @@ Worker::Worker( FileRead& f, EventType::Type eventMask, bool bgTasks, bool allow
         f.Read( tmp, sz );
         m_hostInfo = std::string( tmp, tmp+sz );
     }
-    ProcessCpuNewContext();
+
+    f.Read( sz );
+    for( uint64_t i = 0; i < sz; i++ )
+    {
+        uint8_t type;
+        f.Read( type );
+        if( type == ZoneContext::CPU )
+        {
+            m_data.contexts.push_back( m_slab.AllocInit<CPUZoneContext>() );
+        }
+        else if( type == ZoneContext::GPU )
+        {
+            m_data.contexts.push_back( m_slab.AllocInit<GpuCtxData>() );
+        }
+        else
+        {
+            throw LoadFailure( "Invalid Context Type" );
+        }
+        m_ctxMap[i] = m_data.contexts.back();
+    }
+    f.Read( m_defaultCtx );
 
     f.Read( sz );
     m_data.cpuTopology.reserve( sz );
@@ -847,10 +866,11 @@ Worker::Worker( FileRead& f, EventType::Type eventMask, bool bgTasks, bool allow
 #ifndef TRACY_NO_STATISTICS
     for( auto ctx : GetCtxData() )
     {
+        // TODO: This probably reserves an unecessary amount
         ctx->sourceLocationZones.reserve( sle + sz );
-
-        f.Read( sz );
-        for( uint64_t i = 0; i < sz; i++ )
+        uint64_t slz_sz;
+        f.Read( slz_sz );
+        for( uint64_t i = 0; i < slz_sz; i++ )
         {
             int16_t id;
             uint64_t cnt;
@@ -1082,11 +1102,10 @@ Worker::Worker( FileRead& f, EventType::Type eventMask, bool bgTasks, bool allow
     f.Read( sz );
     s_loadProgress.subTotal.store( sz, std::memory_order_relaxed );
     s_loadProgress.subProgress.store( 0, std::memory_order_relaxed );
-    f.Read( sz );
-    m_data.contexts.reserve_exact( sz, m_slab );
-    for( uint64_t i=0; i<sz; i++ )
+    for( uint64_t i = 0; i < m_data.contexts.size(); i++ )
     {
-        auto ctx = m_slab.AllocInit<GpuCtxData>();
+        if( m_data.contexts[i]->type != ZoneContext::GPU ) continue;
+        auto ctx = static_cast<GpuCtxData*>( m_data.contexts[i] );
 
         uint8_t calibration;
         f.Read7( ctx->thread, calibration, ctx->count, ctx->period, ctx->type, ctx->name, ctx->overflow );
@@ -1110,17 +1129,20 @@ Worker::Worker( FileRead& f, EventType::Type eventMask, bool bgTasks, bool allow
         ctx->threads.reserve_exact( tdsz, m_slab );
         for( uint64_t j=0; j<tdsz; j++ )
         {
-            uint64_t tid, tsz;
+            uint64_t tid;
+            uint32_t tsz;
             f.Read2( tid, tsz );
-            auto td = ctx->threadData.emplace( tid, m_slab.AllocInit<ThreadData>() ).first;
-            td->second->ctx = ctx;
+            auto td = ctx->threadData.emplace( tid, m_slab.AllocInit<ThreadData>() ).first->second;
+            td->ctx = ctx;
+            td->id = tid;
+            td->isFiber = 0;
             if( tsz != 0 )
             {
                 int64_t refTime = 0;
                 int64_t refGpuTime = 0;
-                ReadTimeline( f, td->second->timeline, ctx, tsz, refTime, childIdx );
+                ReadTimeline( f, td->timeline, ctx, tsz, refTime, childIdx );
             }
-            ctx->threads[j] = td->second;
+            ctx->threads[j] = td;
         }
 
         if( fileVer >= FileVersion( 0, 12, 4 ) )
@@ -5915,7 +5937,7 @@ void Worker::ProcessGpuTime( const QueueGpuTime& ev )
             ZoneContext::ZoneThreadData ztd;
             ztd.SetZone( zone );
             //ztd.SetThread( zone->Thread() );
-            ztd.SetThread( ctx->threadCtx ); // TODO: Need cpu thread ctx packet
+            ztd.SetThread( CompressThread( ctx->threadCtx ) ); // TODO: Need cpu thread ctx packet
 
             auto slz = ctx->GetSourceLocationZones( zone->SrcLoc() );
             slz->zones.push_back( ztd );
@@ -7757,6 +7779,15 @@ void Worker::Write( FileWrite& f, bool fiDict )
     f.Write( &sz, sizeof( sz ) );
     f.Write( m_hostInfo.c_str(), sz );
 
+    sz = m_data.contexts.size();
+    f.Write( &sz, sizeof( sz ) );
+    for( auto& ctx : m_data.contexts )
+    {
+        uint8_t type = ctx->type;
+        f.Write( &type, sizeof( type ) );
+    }
+    f.Write( &m_defaultCtx, sizeof( m_defaultCtx ) );
+
     sz = m_data.cpuTopology.size();
     f.Write( &sz, sizeof( sz ) );
     for( auto& package : m_data.cpuTopology )
@@ -8006,8 +8037,6 @@ void Worker::Write( FileWrite& f, bool fiDict )
 
     sz = 0;
     for( auto& v : m_data.contexts ) sz += v->count;
-    f.Write( &sz, sizeof( sz ) );
-    sz = m_data.contexts.size();
     f.Write( &sz, sizeof( sz ) );
     for( auto& cntx : m_data.contexts )
     {
