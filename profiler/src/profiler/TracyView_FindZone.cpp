@@ -27,7 +27,8 @@ void View::FindZones()
     auto it = m_findZone.match.begin();
     while( it != m_findZone.match.end() )
     {
-        if( m_worker.GetDefaultCtx().GetZonesForSourceLocation( *it ).zones.empty() )
+        auto p = m_worker.GetZonesForSourceLocation( *it );
+        if( p.second == nullptr || p.first.zones.empty() )
         {
             it = m_findZone.match.erase( it );
         }
@@ -265,7 +266,16 @@ void View::DrawFindZone()
     ImGui::TextWrapped( "Collection of statistical data is disabled in this build." );
     ImGui::TextWrapped( "Rebuild without the TRACY_NO_STATISTICS macro to enable zone search." );
 #else
-    if( !m_worker.GetDefaultCtx().AreSourceLocationZonesReady() )
+    bool allReady = true;
+    for( auto ctx : m_worker.GetCtxData() )
+    {
+        if( !ctx->AreSourceLocationZonesReady() )
+        {
+            allReady = false;
+            break;
+        }
+    }
+    if( !allReady )
     {
         const auto ty = ImGui::GetTextLineHeight();
         ImGui::PushFont( g_fonts.normal, FontBig );
@@ -378,8 +388,9 @@ void View::DrawFindZone()
             int idx = 0;
             for( auto& v : m_findZone.match )
             {
+                auto p = m_worker.GetZonesForSourceLocation( v );
                 auto& srcloc = m_worker.GetSourceLocation( v );
-                auto& zones = m_worker.GetDefaultCtx().GetZonesForSourceLocation( v ).zones;
+                auto& zones = p.first.zones;
                 SmallColorBox( GetSrcLocColor( srcloc, 0 ) );
                 ImGui::SameLine();
                 ImGui::PushID( idx );
@@ -396,6 +407,8 @@ void View::DrawFindZone()
                 {
                     ImGui::SameLine();
                 }
+                ImGui::TextColored( ImVec4( 1.0, 1.0, 0.0, 1 ), "[%s]", m_worker.GetCtxName( p.second ).c_str() );
+                ImGui::SameLine();
                 const auto fileName = m_worker.GetString( srcloc.file );
                 ImGui::TextColored( ImVec4( 0.5, 0.5, 0.5, 1 ), "(%s) %s", RealToString( zones.size() ), LocationToString( fileName, srcloc.line ) );
                 if( ImGui::IsItemHovered() )
@@ -430,7 +443,7 @@ void View::DrawFindZone()
 
         ImGui::Separator();
 
-        auto& zoneData = m_worker.GetDefaultCtx().GetZonesForSourceLocation( m_findZone.match[m_findZone.selMatch] );
+        auto& zoneData = m_worker.GetZonesForSourceLocation( m_findZone.match[m_findZone.selMatch] ).first;
         auto& zones = zoneData.zones;
         zones.ensure_sorted();
         if( ImGui::TreeNodeEx( "Histogram", ImGuiTreeNodeFlags_DefaultOpen ) )

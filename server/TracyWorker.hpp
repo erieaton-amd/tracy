@@ -495,6 +495,7 @@ public:
     tracy_force_inline const ZoneContext& GetDefaultCtx() const { assert(m_defaultCtx < UINT8_MAX); return *m_ctxMap[m_defaultCtx]; }
     tracy_force_inline ZoneContext& GetDefaultCtx() { assert(m_defaultCtx < UINT8_MAX); return *m_ctxMap[m_defaultCtx]; }
     const Vector<ZoneContext*>& GetCtxData() const { return m_data.contexts; }
+    const std::string GetCtxName( ZoneContext* ctx ) const;
     const std::string GetCtxName( uint8_t idx ) const;
     const Vector<PlotData*>& GetPlots() const { return m_data.plots.Data(); }
     const MemData& GetMemoryNamed( uint64_t name ) const;
@@ -564,6 +565,8 @@ public:
     const unordered_flat_map<uint64_t, SymbolData>& GetSymbolMap() const { return m_data.symbolMap; }
 
 #ifndef TRACY_NO_STATISTICS
+    pair<ZoneContext::SourceLocationZones&, ZoneContext*> GetZonesForSourceLocation( int16_t srcloc );
+
     bool IsCpuUsageReady() const { return m_data.ctxUsageReady; }
     const Vector<ContextSwitchUsage>& GetCpuUsage() const { return m_data.ctxUsage; }
 

@@ -2612,6 +2612,22 @@ std::vector<int16_t> Worker::GetMatchingSourceLocation( const char* query, bool 
 }
 
 #ifndef TRACY_NO_STATISTICS
+pair<ZoneContext::SourceLocationZones&, ZoneContext*> Worker::GetZonesForSourceLocation( int16_t srcloc )
+{
+    ZoneContext::SourceLocationZones* result = nullptr;
+    ZoneContext* ctxt = nullptr;
+    for( auto ctx : GetCtxData() )
+    {
+        result = &ctx->GetZonesForSourceLocation( srcloc );
+        if( !result->zones.empty() )
+        {
+            ctxt = ctx;
+            break;
+        }
+    }
+    return { *result, ctxt };
+}
+
 const SymbolStats* Worker::GetSymbolStats( uint64_t symAddr ) const
 {
     assert( AreCallstackSamplesReady() );
@@ -3438,6 +3454,18 @@ ThreadData* Worker::GetCurrentThreadData()
     if( !td ) td = GetDefaultCtx().threadCtxData = NoticeThread( GetDefaultCtx().threadCtx );
     if( td->fiber ) td = td->fiber;
     return td;
+}
+
+const std::string Worker::GetCtxName( ZoneContext* ctx ) const
+{
+    for( uint8_t idx = 0; idx < m_data.contexts.size(); idx++ )
+    {
+        if( ctx == m_ctxMap[idx] )
+        {
+            return GetCtxName( idx );
+        }
+    }
+    return "Unknown";
 }
 
 const std::string Worker::GetCtxName( uint8_t idx ) const
