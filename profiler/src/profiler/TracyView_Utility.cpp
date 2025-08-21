@@ -171,6 +171,7 @@ const pair<const ZoneEvent*, const ThreadData*> View::FindZoneAtTime( uint64_t t
         }
     }
   }
+  return { nullptr, nullptr };
 }
 
 const ZoneEvent* View::GetZoneChild( const ZoneEvent& zone, int64_t time ) const
@@ -336,8 +337,8 @@ bool View::IsZoneReentry( const ZoneEvent& zone ) const
             }
         }
     }
-    return false;
   }
+  return false;
 }
 
 bool View::IsZoneReentry( const ZoneEvent& zone, uint64_t tid, const ZoneContext* ctx ) const

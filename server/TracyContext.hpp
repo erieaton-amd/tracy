@@ -25,6 +25,9 @@ struct ThreadData
     uint8_t* stackCount;
     int32_t groupHint;
     ZoneContext* ctx;
+#ifndef TRACY_NO_STATISTICS
+  Vector<int64_t> childTimeStack;
+#endif
 
     tracy_force_inline void IncStackCount( int16_t srcloc ) { stackCount[uint16_t( srcloc )]++; }
     tracy_force_inline bool DecStackCount( int16_t srcloc ) { return --stackCount[uint16_t( srcloc )] != 0; }
@@ -149,7 +152,7 @@ struct CPUThreadData : public ThreadData
   // uint32_t nextZoneId;
   // Vector<uint32_t> zoneIdStack;
 #ifndef TRACY_NO_STATISTICS
-    Vector<int64_t> childTimeStack;
+  //Vector<int64_t> childTimeStack;
     Vector<GhostZone> ghostZones;
     uint64_t ghostIdx;
     SortedVector<SampleData, SampleDataSort> postponedSamples;

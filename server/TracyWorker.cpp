@@ -1953,13 +1953,15 @@ Worker::~Worker()
         {
             vt.second->timeline.~Vector();
             vt.second->stack.~Vector();
+#ifndef TRACY_NO_STATISTICS
+            vt.second->childTimeStack.~Vector();
+#endif
             if (v->type == ZoneContext::CPU) {
               auto ct = static_cast<CPUThreadData *>(vt.second);
               ct->messages.~Vector();
               ct->zoneIdStack.~Vector();
               ct->samples.~Vector();
 #ifndef TRACY_NO_STATISTICS
-              ct->childTimeStack.~Vector();
               ct->ghostZones.~Vector();
 #endif
             }
@@ -3538,8 +3540,7 @@ void Worker::NewZone( ZoneEvent* zone )
     td->nextZoneId = 0;
 
 #ifndef TRACY_NO_STATISTICS
-    if (GetDefaultCtx().type == ZoneContext::CPU)
-      static_cast<CPUThreadData*>(td)->childTimeStack.push_back( 0 );
+    td->childTimeStack.push_back( 0 );
 #endif
 }
 
@@ -4814,6 +4815,58 @@ void Worker::ProcessZoneBeginAllocSrcLocCallstack( const QueueZoneBeginLean& ev 
     it->second = 0;
 }
 
+#ifndef TRACY_NO_STATISTICS
+void Worker::UpdateStats( ZoneEvent* zone, ThreadData& td, bool isReentry, int64_t timeEnd )
+{
+    assert( !td.childTimeStack.empty() );
+    const auto timeSpan = timeEnd - zone->Start();
+    if( timeSpan > 0 )
+    {
+        const auto ctid = CompressThread( td.id );
+        ZoneContext::ZoneThreadData ztd;
+        ztd.SetZone( zone );
+        ztd.SetThread( ctid );
+
+        auto slz = td.ctx->GetSourceLocationZones( zone->SrcLoc() );
+        slz->zones.push_back( ztd );
+        if( slz->min > timeSpan ) slz->min = timeSpan;
+        if( slz->max < timeSpan ) slz->max = timeSpan;
+        slz->total += timeSpan;
+        slz->sumSq += double( timeSpan ) * timeSpan;
+        const auto selfSpan = timeSpan - td.childTimeStack.back_and_pop();
+        if( slz->selfMin > selfSpan ) slz->selfMin = selfSpan;
+        if( slz->selfMax < selfSpan ) slz->selfMax = selfSpan;
+        slz->selfTotal += selfSpan;
+
+        if( !isReentry )
+        {
+            slz->nonReentrantCount++;
+            if( slz->nonReentrantMin > timeSpan ) slz->nonReentrantMin = timeSpan;
+            if( slz->nonReentrantMax < timeSpan ) slz->nonReentrantMax = timeSpan;
+            slz->nonReentrantTotal += timeSpan;
+        }
+        if( !td.childTimeStack.empty() )
+        {
+            td.childTimeStack.back() += timeSpan;
+        }
+
+        auto it = slz->threadCnt.find( ctid );
+        if( it == slz->threadCnt.end() )
+        {
+            slz->threadCnt.emplace( ctid, 1 );
+        }
+        else
+        {
+            it->second++;
+        }
+    }
+    else
+    {
+        td.childTimeStack.pop_back();
+    }
+}
+#endif
+
 void Worker::ProcessZoneEnd( const QueueZoneEnd& ev )
 {
     auto td = GetCurrentThreadData();
@@ -4869,56 +4922,7 @@ void Worker::ProcessZoneEnd( const QueueZoneEnd& ev )
     }
 
 #ifndef TRACY_NO_STATISTICS
-    if (td->ctx->type == ZoneContext::CPU)
-    {
-      auto ctd = static_cast<CPUThreadData*>(td);
-      assert( !ctd->childTimeStack.empty() );
-      const auto timeSpan = timeEnd - zone->Start();
-      if( timeSpan > 0 )
-      {
-        const auto ctid = CompressThread( ctd->id );
-        ZoneContext::ZoneThreadData ztd;
-        ztd.SetZone( zone );
-        ztd.SetThread( ctid );
-
-        auto slz = td->ctx->GetSourceLocationZones( zone->SrcLoc() );
-        slz->zones.push_back( ztd );
-        if( slz->min > timeSpan ) slz->min = timeSpan;
-        if( slz->max < timeSpan ) slz->max = timeSpan;
-        slz->total += timeSpan;
-        slz->sumSq += double( timeSpan ) * timeSpan;
-        const auto selfSpan = timeSpan - ctd->childTimeStack.back_and_pop();
-        if( slz->selfMin > selfSpan ) slz->selfMin = selfSpan;
-        if( slz->selfMax < selfSpan ) slz->selfMax = selfSpan;
-        slz->selfTotal += selfSpan;
-
-        if( !isReentry )
-        {
-          slz->nonReentrantCount++;
-          if( slz->nonReentrantMin > timeSpan ) slz->nonReentrantMin = timeSpan;
-          if( slz->nonReentrantMax < timeSpan ) slz->nonReentrantMax = timeSpan;
-          slz->nonReentrantTotal += timeSpan;
-        }
-        if( !ctd->childTimeStack.empty() )
-        {
-          ctd->childTimeStack.back() += timeSpan;
-        }
-
-        auto it = slz->threadCnt.find( ctid );
-        if( it == slz->threadCnt.end() )
-        {
-          slz->threadCnt.emplace( ctid, 1 );
-        }
-        else
-        {
-          it->second++;
-        }
-      }
-      else
-      {
-        ctd->childTimeStack.pop_back();
-      }
-    }
+    UpdateStats( zone, *td, isReentry, timeEnd );
 #else
     CountZoneStatistics( zone );
 #endif
@@ -5687,6 +5691,9 @@ void Worker::ProcessGpuNewContext( const QueueGpuNewContext& ev )
     gpu->lastGpuTime = 0;
     gpu->overflow = 0;
     gpu->overflowMul = 0;
+#ifndef TRACY_NO_STATISTICS
+    gpu->SetSourceLocationZonesReady();
+#endif
     m_data.contexts.push_back( gpu );
     m_ctxMap[ev.context] = gpu;
 }
@@ -5770,6 +5777,9 @@ void Worker::ProcessGpuZoneBeginImplCommon( ZoneEvent* zone, const QueueGpuZoneB
     }
     auto timeline = &td->second->timeline;
     auto& stack = td->second->stack;
+#ifndef TRACY_NO_STATISTICS
+    td->second->childTimeStack.push_back( 0 );
+#endif
     if( !stack.empty() )
     {
         auto back = stack.back();
@@ -5930,22 +5940,8 @@ void Worker::ProcessGpuTime( const QueueGpuTime& ev )
     {
         zone->SetEnd( gpuTime );
 #ifndef TRACY_NO_STATISTICS
-        const auto gpuStart = zone->Start();
-        const auto timeSpan = gpuTime - gpuStart;
-        if( timeSpan > 0 )
-        {
-            ZoneContext::ZoneThreadData ztd;
-            ztd.SetZone( zone );
-            //ztd.SetThread( zone->Thread() );
-            ztd.SetThread( CompressThread( ctx->threadCtx ) ); // TODO: Need cpu thread ctx packet
-
-            auto slz = ctx->GetSourceLocationZones( zone->SrcLoc() );
-            slz->zones.push_back( ztd );
-            if( slz->min > timeSpan ) slz->min = timeSpan;
-            if( slz->max < timeSpan ) slz->max = timeSpan;
-            slz->total += timeSpan;
-            slz->sumSq += double( timeSpan ) * timeSpan;
-        }
+        // TODO: reentry can be supported here probably
+        UpdateStats( zone, *ctx->threadData.at( ctx->threadCtx ), false, gpuTime );
 #else
         CountZoneStatistics( zone );
 #endif

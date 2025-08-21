@@ -519,6 +519,7 @@ public:
     unordered_flat_map<CallstackFrameId, CallstackFrameData*, CallstackFrameIdHash, CallstackFrameIdCompare>& GetCallstackFrameMap() { return m_data.callstackFrameMap; }
 
 #ifndef TRACY_NO_STATISTICS
+    void UpdateStats( ZoneEvent* zone, ThreadData& td, bool isReentry, int64_t timeEnd );
     const VarArray<CallstackFrameId>& GetParentCallstack( uint32_t idx ) const { return *m_data.parentCallstackPayload[idx]; }
     const CallstackFrameData* GetParentCallstackFrame( const CallstackFrameId& ptr ) const;
     const Vector<SampleDataRange>* GetSamplesForSymbol( uint64_t symAddr ) const;
