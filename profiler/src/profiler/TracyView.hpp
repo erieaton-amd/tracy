@@ -402,7 +402,7 @@ private:
 
     unordered_flat_map<uint64_t, bool> m_visibleMsgThread;
     unordered_flat_map<uint64_t, bool> m_waitStackThread;
-    unordered_flat_map<uint64_t, bool> m_flameGraphThread;
+    unordered_flat_map<ZoneContext*, unordered_flat_map<uint64_t, bool>> m_flameGraphThread;
     unordered_flat_map<const void*, int> m_gpuDrift;
     unordered_flat_map<const PlotData*, PlotView> m_plotView;
     Vector<const ThreadData*> m_threadOrder;
@@ -429,14 +429,19 @@ private:
         return it->second;
     }
 
-    tracy_force_inline bool& FlameGraphThread( uint64_t thread )
+    tracy_force_inline bool& FlameGraphThread( ZoneContext* ctx, uint64_t thread )
     {
-        auto it = m_flameGraphThread.find( thread );
+        auto it = m_flameGraphThread.find( ctx );
         if( it == m_flameGraphThread.end() )
         {
-            it = m_flameGraphThread.emplace( thread, true ).first;
+            it = m_flameGraphThread.emplace( ctx, decltype( m_flameGraphThread )::mapped_type() ).first;
         }
-        return it->second;
+        auto it2 = it->second.find( thread );
+        if( it2 == it->second.end() )
+        {
+            it2 = it->second.emplace( thread, true ).first;
+        }
+        return it2->second;
     }
 
     tracy_force_inline int& GpuDrift( const void* ptr )
@@ -527,6 +532,8 @@ private:
     bool m_showAnnotationList = false;
     bool m_showWaitStacks = false;
     bool m_showFlameGraph = false;
+    std::string m_flameCtxName;
+    uint8_t m_flameCtx = 0;
 
     AccumulationMode m_statAccumulationMode = AccumulationMode::SelfOnly;
     std::string m_statCtxName;
