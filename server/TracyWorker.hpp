@@ -566,6 +566,7 @@ public:
 
 #ifndef TRACY_NO_STATISTICS
     pair<ZoneContext::SourceLocationZones&, ZoneContext*> GetZonesForSourceLocation( int16_t srcloc );
+    bool AreSourceLocationZonesReady() const;
 
     bool IsCpuUsageReady() const { return m_data.ctxUsageReady; }
     const Vector<ContextSwitchUsage>& GetCpuUsage() const { return m_data.ctxUsage; }

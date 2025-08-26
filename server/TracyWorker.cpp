@@ -2628,6 +2628,19 @@ pair<ZoneContext::SourceLocationZones&, ZoneContext*> Worker::GetZonesForSourceL
     return { *result, ctxt };
 }
 
+bool Worker::AreSourceLocationZonesReady() const {
+  bool allReady = true;
+  for( auto ctx : GetCtxData() )
+  {
+    if( !ctx->AreSourceLocationZonesReady() )
+    {
+      allReady = false;
+      break;
+    }
+  }
+  return allReady;
+}
+
 const SymbolStats* Worker::GetSymbolStats( uint64_t symAddr ) const
 {
     assert( AreCallstackSamplesReady() );

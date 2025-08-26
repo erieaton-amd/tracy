@@ -266,16 +266,7 @@ void View::DrawFindZone()
     ImGui::TextWrapped( "Collection of statistical data is disabled in this build." );
     ImGui::TextWrapped( "Rebuild without the TRACY_NO_STATISTICS macro to enable zone search." );
 #else
-    bool allReady = true;
-    for( auto ctx : m_worker.GetCtxData() )
-    {
-        if( !ctx->AreSourceLocationZonesReady() )
-        {
-            allReady = false;
-            break;
-        }
-    }
-    if( !allReady )
+    if( !m_worker.AreSourceLocationZonesReady() )
     {
         const auto ty = ImGui::GetTextLineHeight();
         ImGui::PushFont( g_fonts.normal, FontBig );
