@@ -112,7 +112,11 @@ void View::DrawOptions()
         const auto expand = ImGui::TreeNode( "GPU zones" );
         ImGui::SameLine();
         size_t visibleGpu = 0;
-        for( const auto& gd : gpuData ) if( m_tc.GetItem( gd ).IsVisible() ) visibleGpu++;
+        for( const auto& gd : gpuData )
+        {
+            if( gd->type != ZoneContext::GPU ) continue;
+            if( m_tc.GetItem( gd ).IsVisible() ) visibleGpu++;
+        }
         if( visibleGpu == gpuData.size() )
         {
             ImGui::TextDisabled( "(%zu)", gpuData.size() );

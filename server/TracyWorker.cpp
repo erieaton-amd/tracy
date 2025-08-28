@@ -1108,7 +1108,7 @@ Worker::Worker( FileRead& f, EventType::Type eventMask, bool bgTasks, bool allow
         auto ctx = static_cast<GpuCtxData*>( m_data.contexts[i] );
 
         uint8_t calibration;
-        f.Read7( ctx->thread, calibration, ctx->count, ctx->period, ctx->type, ctx->name, ctx->overflow );
+        f.Read7( ctx->thread, calibration, ctx->count, ctx->period, ctx->gtype, ctx->name, ctx->overflow );
         uint64_t notesz;
         if( fileVer >= FileVersion( 0, 12, 4 ) )
         {
@@ -8084,7 +8084,7 @@ void Worker::Write( FileWrite& f, bool fiDict )
         f.Write( &calibration, sizeof( calibration ) );
         f.Write( &ctx->count, sizeof( ctx->count ) );
         f.Write( &ctx->period, sizeof( ctx->period ) );
-        f.Write( &ctx->type, sizeof( ctx->type ) );
+        f.Write( &ctx->type, sizeof( ctx->gtype ) );
         f.Write( &ctx->name, sizeof( ctx->name ) );
         f.Write( &ctx->overflow, sizeof( ctx->overflow ) );
         sz = ctx->noteNames.size();
