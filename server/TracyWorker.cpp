@@ -633,13 +633,13 @@ Worker::Worker( FileRead& f, EventType::Type eventMask, bool bgTasks, bool allow
     f.Read( sz );
     for( uint64_t i = 0; i < sz; i++ )
     {
-        uint8_t type;
+        ZoneContextType type;
         f.Read( type );
-        if( type == ZoneContext::CPU )
+        if( type == ZoneContextType::CPU )
         {
             m_data.contexts.push_back( m_slab.AllocInit<CPUZoneContext>() );
         }
-        else if( type == ZoneContext::GPU )
+        else if( type != ZoneContextType::Invalid )
         {
             m_data.contexts.push_back( m_slab.AllocInit<GpuCtxData>() );
         }
@@ -1104,11 +1104,11 @@ Worker::Worker( FileRead& f, EventType::Type eventMask, bool bgTasks, bool allow
     s_loadProgress.subProgress.store( 0, std::memory_order_relaxed );
     for( uint64_t i = 0; i < m_data.contexts.size(); i++ )
     {
-        if( m_data.contexts[i]->type != ZoneContext::GPU ) continue;
+        if( m_data.contexts[i]->type == ZoneContextType::CPU ) continue;
         auto ctx = static_cast<GpuCtxData*>( m_data.contexts[i] );
 
         uint8_t calibration;
-        f.Read7( ctx->thread, calibration, ctx->count, ctx->period, ctx->gtype, ctx->name, ctx->overflow );
+        f.Read7( ctx->thread, calibration, ctx->count, ctx->period, ctx->type, ctx->name, ctx->overflow );
         uint64_t notesz;
         if( fileVer >= FileVersion( 0, 12, 4 ) )
         {
@@ -1956,7 +1956,7 @@ Worker::~Worker()
 #ifndef TRACY_NO_STATISTICS
             vt.second->childTimeStack.~Vector();
 #endif
-            if (v->type == ZoneContext::CPU) {
+            if (v->type == ZoneContextType::CPU) {
               auto ct = static_cast<CPUThreadData *>(vt.second);
               ct->messages.~Vector();
               ct->zoneIdStack.~Vector();
@@ -3485,18 +3485,7 @@ const std::string Worker::GetCtxName( uint8_t idx ) const
 {
     auto ctx = m_data.contexts[idx];
     std::stringstream ctxName;
-    if( ctx->type == ZoneContext::CPU )
-    {
-        ctxName << "CPU";
-    }
-    else if( ctx->type == ZoneContext::GPU )
-    {
-        ctxName << "GPU";
-    }
-    else
-    {
-        ctxName << "CTX";
-    }
+    ctxName << ZoneContextNames[(uint8_t)ctx->type];
     ctxName << ":" << (unsigned)idx;
     if( ctx->name.Active() )
     {
@@ -5704,7 +5693,7 @@ void Worker::ProcessCpuNewContext( )
 void Worker::ProcessGpuNewContext( const QueueGpuNewContext& ev )
 {
     assert( !m_ctxMap[ev.context] );
-    assert( ev.type != GpuContextType::Invalid );
+    assert( ev.type != ZoneContextType::Invalid );
 
     int64_t gpuTime;
     if( ev.period == 1.f )
@@ -5723,7 +5712,7 @@ void Worker::ProcessGpuNewContext( const QueueGpuNewContext& ev )
     gpu->thread = ev.thread;
     gpu->period = ev.period;
     gpu->count = 0;
-    gpu->gtype = ev.type;
+    gpu->type = ev.type;
     gpu->hasPeriod = ev.period != 1.f;
     gpu->hasCalibration = ev.flags & GpuContextCalibration;
     gpu->calibratedGpuTime = gpuTime;
@@ -7820,7 +7809,7 @@ void Worker::Write( FileWrite& f, bool fiDict )
     f.Write( &sz, sizeof( sz ) );
     for( auto& ctx : m_data.contexts )
     {
-        uint8_t type = ctx->type;
+        ZoneContextType type = ctx->type;
         f.Write( &type, sizeof( type ) );
     }
     f.Write( &m_defaultCtx, sizeof( m_defaultCtx ) );
@@ -8077,14 +8066,14 @@ void Worker::Write( FileWrite& f, bool fiDict )
     f.Write( &sz, sizeof( sz ) );
     for( auto& cntx : m_data.contexts )
     {
-        if (cntx->type != ZoneContext::GPU) continue;
+        if (cntx->type == ZoneContextType::CPU) continue;
         auto ctx = static_cast<GpuCtxData*>(cntx);
         f.Write( &ctx->thread, sizeof( ctx->thread ) );
         uint8_t calibration = ctx->hasCalibration;
         f.Write( &calibration, sizeof( calibration ) );
         f.Write( &ctx->count, sizeof( ctx->count ) );
         f.Write( &ctx->period, sizeof( ctx->period ) );
-        f.Write( &ctx->type, sizeof( ctx->gtype ) );
+        f.Write( &ctx->type, sizeof( ctx->type ) );
         f.Write( &ctx->name, sizeof( ctx->name ) );
         f.Write( &ctx->overflow, sizeof( ctx->overflow ) );
         sz = ctx->noteNames.size();

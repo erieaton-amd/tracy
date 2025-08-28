@@ -87,7 +87,7 @@ void View::DrawThread( const TimelineContext& ctx, const ThreadData& thread, con
         assert( ctxSwitch );
         DrawContextSwitchList( ctx, ctxDraw, ctxSwitch->v, ctxOffset, offset, thread.isFiber );
     }
-    if( thread.ctx->type == ZoneContext::CPU && hasSamples && !samplesDraw.empty() )
+    if( thread.ctx->type == ZoneContextType::CPU && hasSamples && !samplesDraw.empty() )
     {
         DrawSampleList( ctx, samplesDraw, static_cast<const CPUThreadData&>(thread).samples, sampleOffset );
     }

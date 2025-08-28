@@ -935,7 +935,7 @@ void View::DrawFlameGraph()
                 if( FlameGraphThread( ctx, thread->id ) )
                 {
                     m_td.Queue( [this, idx, thread, &threadData] {
-                        if( thread->ctx->type == ZoneContext::CPU )
+                        if( thread->ctx->type == ZoneContextType::CPU )
                         {
                             const Vector<SampleData>& sampleData = static_cast<const CPUThreadData*>( thread )->samples;
                             BuildFlameGraph( m_worker, threadData[idx], sampleData );

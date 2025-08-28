@@ -36,7 +36,7 @@ bool TimelineItemThread::IsEmpty() const
     return crash.thread != m_thread->id &&
         m_thread->timeline.empty() &&
         m_thread->messages.empty() &&
-        (m_thread->ctx->type != ZoneContext::CPU ||
+        (m_thread->ctx->type != ZoneContextType::CPU ||
          static_cast<const CPUThreadData*>(m_thread)->ghostZones.empty());
 }
 
@@ -221,7 +221,7 @@ void TimelineItemThread::HeaderTooltip( const char* label ) const
     {
         TextFocused( "Running state regions:", RealToString( ctx->v.size() ) );
     }
-    if( m_thread->ctx->type != ZoneContext::CPU )
+    if( m_thread->ctx->type != ZoneContextType::CPU )
     {
         auto cpu_thread = static_cast<const CPUThreadData*>( m_thread );
         if( !cpu_thread->samples.empty() )
@@ -243,7 +243,7 @@ void TimelineItemThread::HeaderExtraContents( const TimelineContext& ctx, int of
     m_view.DrawThreadMessagesList( ctx, m_msgDraw, offset, m_thread->id );
 
 #ifndef TRACY_NO_STATISTICS
-    if( m_thread->ctx->type == ZoneContext::CPU )
+    if( m_thread->ctx->type == ZoneContextType::CPU )
     {
         auto cpu_thread = static_cast<const CPUThreadData*>( m_thread );
         const bool hasGhostZones = m_worker.AreGhostZonesReady() && !cpu_thread->ghostZones.empty();
@@ -318,7 +318,7 @@ void TimelineItemThread::Preprocess( const TimelineContext& ctx, TaskDispatch& t
 
     td.Queue( [this, &ctx, visible] {
 #ifndef TRACY_NO_STATISTICS
-        if( m_thread->ctx->type == ZoneContext::CPU && m_worker.AreGhostZonesReady() && ( m_ghost || ( m_view.GetViewData().ghostZones && m_thread->timeline.empty() ) ) )
+        if( m_thread->ctx->type == ZoneContextType::CPU && m_worker.AreGhostZonesReady() && ( m_ghost || ( m_view.GetViewData().ghostZones && m_thread->timeline.empty() ) ) )
         {
             auto cpu_thread = static_cast<const CPUThreadData*>( m_thread );
             m_depth = PreprocessGhostLevel( ctx, cpu_thread->ghostZones, 0, visible );
@@ -346,7 +346,7 @@ void TimelineItemThread::Preprocess( const TimelineContext& ctx, TaskDispatch& t
         }
     }
 
-    if( m_thread->ctx->type == ZoneContext::CPU )
+    if( m_thread->ctx->type == ZoneContextType::CPU )
     {
         auto cpu_thread = static_cast<const CPUThreadData*>( m_thread );
         m_hasSamples = false;
@@ -548,7 +548,7 @@ void TimelineItemThread::PreprocessContextSwitches( const TimelineContext& ctx, 
         {
             first = false;
         }
-        else if ( m_thread->ctx->type == ZoneContext::CPU )
+        else if ( m_thread->ctx->type == ZoneContextType::CPU )
         {
             const Vector<SampleData>& sampleData = static_cast<const CPUThreadData*>(m_thread)->samples;
             uint32_t waitStack = 0;

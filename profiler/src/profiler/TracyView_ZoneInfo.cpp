@@ -473,7 +473,7 @@ void View::DrawZoneInfoWindow()
             TextDisabledUnformatted( buf );
         }
 
-        if( thread->ctx->type == ZoneContext::GPU )
+        if( thread->ctx->type != ZoneContextType::CPU )
         {
             assert( m_worker.HasZoneExtra( ev ));
             auto& extra = m_worker.GetZoneExtra( ev );
@@ -1532,7 +1532,7 @@ void View::ZoneTooltip( const ZoneEvent& ev, const ThreadData& thread )
         TextDisabledUnformatted( buf );
     }
 
-    if( thread.ctx->type == ZoneContext::GPU )
+    if( thread.ctx->type != ZoneContextType::CPU )
     {
         assert( m_worker.HasZoneExtra( ev ) );
         auto& extra = m_worker.GetZoneExtra( ev );

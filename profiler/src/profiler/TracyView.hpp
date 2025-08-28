@@ -37,19 +37,6 @@
 namespace tracy
 {
 
-constexpr const char* GpuContextNames[] = {
-    "Invalid",
-    "OpenGL",
-    "Vulkan",
-    "OpenCL",
-    "Direct3D 12",
-    "Direct3D 11",
-    "Metal",
-    "Custom",
-    "CUDA",
-    "Rocprof"
-};
-
 struct MemoryPage;
 class FileRead;
 class SourceView;
@@ -340,7 +327,6 @@ private:
   //ZoneColorData GetZoneColorData( const GpuEvent& ev );
 
     void ZoomToZone( const ZoneEvent& ev );
-  //void ZoomToZone( const GpuEvent& ev );
     void ZoomToPrevFrame();
     void ZoomToNextFrame();
     void CenterAtTime( int64_t t );

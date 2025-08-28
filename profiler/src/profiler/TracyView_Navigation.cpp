@@ -9,7 +9,7 @@ void View::ZoomToZone( const ZoneEvent& ev )
     if( end - ev.Start() <= 0 ) return;
     auto td = GetZoneThreadData( ev );
     auto ctx = td->ctx;
-    if ( !ctx || ctx->type == ZoneContext::CPU)
+    if ( !ctx || ctx->type == ZoneContextType::CPU)
     {
         ZoomToRange( ev.Start(), end );
     }

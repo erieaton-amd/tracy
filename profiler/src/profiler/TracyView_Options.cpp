@@ -114,7 +114,7 @@ void View::DrawOptions()
         size_t visibleGpu = 0;
         for( const auto& gd : gpuData )
         {
-            if( gd->type != ZoneContext::GPU ) continue;
+            if( gd->type == ZoneContextType::CPU ) continue;
             if( m_tc.GetItem( gd ).IsVisible() ) visibleGpu++;
         }
         if( visibleGpu == gpuData.size() )
@@ -129,7 +129,7 @@ void View::DrawOptions()
         {
             for( size_t i=0; i<gpuData.size(); i++ )
             {
-                if ( gpuData[i]->type != ZoneContext::GPU ) continue;
+                if ( gpuData[i]->type == ZoneContextType::CPU ) continue;
                 const auto& timeline = gpuData[i]->threadData.begin()->second->timeline;
                 m_tc.GetItem( gpuData[i] ).VisibilityCheckbox();
                 ImGui::SameLine();
@@ -145,7 +145,7 @@ void View::DrawOptions()
                 {
                     char buf[64];
                     auto& item = (TimelineItemGpu&)( m_tc.GetItem( gpuData[i] ) );
-                    sprintf( buf, "%s context %i", GpuContextNames[(int)gpuData[i]->type], item.GetIdx() );
+                    sprintf( buf, "%s context %i", ZoneContextNames[(int)gpuData[i]->type], item.GetIdx() );
                     ImGui::PushFont( g_fonts.normal, FontSmall );
                     ImGui::TextUnformatted( buf );
                     ImGui::PopFont();

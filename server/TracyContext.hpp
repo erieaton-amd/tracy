@@ -8,6 +8,20 @@
 namespace tracy
 {
 
+constexpr const char* ZoneContextNames[] = {
+    "Invalid",
+    "OpenGL",
+    "Vulkan",
+    "OpenCL",
+    "Direct3D 12",
+    "Direct3D 11",
+    "Metal",
+    "Custom",
+    "CUDA",
+    "Rocprof",
+    "CPU"
+};
+
 struct ZoneContext;
 class Worker;
 
@@ -93,11 +107,7 @@ private:
 
 public:
     StringIdx name;
-    enum : uint8_t
-    {
-        CPU,
-        GPU
-    } type;
+    ZoneContextType type;
     unordered_flat_map<uint64_t, ThreadData*> threadData;
     Vector<ThreadData*> threads; // TODO: delete me?
     uint64_t count;
@@ -139,20 +149,12 @@ public:
 
 struct CPUZoneContext : public ZoneContext
 {
-    CPUZoneContext() { type = CPU; }
+    CPUZoneContext() { type = ZoneContextType::CPU; }
 };
 
 struct CPUThreadData : public ThreadData
 {
-  // uint64_t id;
-  // uint64_t count;
-  // Vector<short_ptr<ZoneEvent>> timeline;
-  // Vector<short_ptr<ZoneEvent>> stack;
-  // Vector<short_ptr<MessageData>> messages;
-  // uint32_t nextZoneId;
-  // Vector<uint32_t> zoneIdStack;
 #ifndef TRACY_NO_STATISTICS
-  //Vector<int64_t> childTimeStack;
     Vector<GhostZone> ghostZones;
     uint64_t ghostIdx;
     SortedVector<SampleData, SampleDataSort> postponedSamples;
@@ -161,20 +163,7 @@ struct CPUThreadData : public ThreadData
     SampleData pendingSample;
     Vector<SampleData> ctxSwitchSamples;
     uint64_t kernelSampleCnt;
-  // uint8_t isFiber;
-  // ThreadData* fiber;
-  // uint8_t* stackCount;
-  // int32_t groupHint;
-
-  // tracy_force_inline void IncStackCount( int16_t srcloc ) { stackCount[uint16_t(srcloc)]++; }
-  // tracy_force_inline bool DecStackCount( int16_t srcloc ) { return --stackCount[uint16_t(srcloc)] != 0; }
 };
-
-// struct GpuCtxThreadData
-// {
-//     Vector<short_ptr<GpuEvent>> timeline;
-//     Vector<short_ptr<GpuEvent>> stack;
-// };
 
 struct GpuCtxData : public ZoneContext
 {
@@ -182,7 +171,6 @@ struct GpuCtxData : public ZoneContext
     uint64_t thread;
   // uint64_t count;
     float period;
-    GpuContextType gtype; // TODO: merge with ZoneContext::type
     bool hasPeriod;
     bool hasCalibration;
     int64_t calibratedGpuTime;
@@ -196,8 +184,6 @@ struct GpuCtxData : public ZoneContext
     //  unordered_flat_map<int64_t, StringIdx> noteNames;
     //  unordered_flat_map<uint16_t, unordered_flat_map<int64_t, double>> notes;
     short_ptr<ZoneEvent> query[64 * 1024];
-
-    GpuCtxData() { type = GPU; }
 };
 
 enum

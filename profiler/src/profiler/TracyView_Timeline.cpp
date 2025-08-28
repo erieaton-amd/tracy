@@ -361,11 +361,11 @@ void View::DrawTimeline()
     for( auto& v : m_worker.GetCtxData() )
     {
         // TODO: Consolidate handling here.
-        if( m_vd.drawGpuZones && v->type == ZoneContext::GPU )
+        if( m_vd.drawGpuZones && v->type != ZoneContextType::CPU )
         {
             m_tc.AddItem<TimelineItemGpu>( static_cast<GpuCtxData*>( v ) );
         }
-        else if( v->type == ZoneContext::CPU )
+        else if( v->type == ZoneContextType::CPU )
         {
             if( m_vd.drawCpuData && m_worker.HasContextSwitches() )
             {

@@ -31,7 +31,7 @@ const char* TimelineItemGpu::HeaderLabel() const
     }
     else
     {
-        sprintf( buf, "%s context %i", GpuContextNames[(int)m_gpu->gtype], m_idx );
+        sprintf( buf, "%s context %i", ZoneContextNames[(int)m_gpu->type], m_idx );
     }
     return buf;
 }
@@ -40,13 +40,13 @@ void TimelineItemGpu::HeaderTooltip( const char* label ) const
 {
     const bool dynamicColors = m_view.GetViewData().dynamicColors;
     const bool isMultithreaded =
-        ( m_gpu->gtype == GpuContextType::Vulkan ) ||
-        ( m_gpu->gtype == GpuContextType::OpenCL ) ||
-        ( m_gpu->gtype == GpuContextType::Direct3D12 ) ||
-        ( m_gpu->gtype == GpuContextType::Metal );
+        ( m_gpu->type == ZoneContextType::Vulkan ) ||
+        ( m_gpu->type == ZoneContextType::OpenCL ) ||
+        ( m_gpu->type == ZoneContextType::Direct3D12 ) ||
+        ( m_gpu->type == ZoneContextType::Metal );
 
     char buf[64];
-    sprintf( buf, "%s context %i", GpuContextNames[(int)m_gpu->gtype], m_idx );
+    sprintf( buf, "%s context %i", ZoneContextNames[(int)m_gpu->type], m_idx );
 
     ImGui::BeginTooltip();
     if( m_gpu->name.Active() ) TextFocused( "Name:", m_worker.GetString( m_gpu->name ) );
@@ -134,7 +134,7 @@ void TimelineItemGpu::HeaderExtraContents( const TimelineContext& ctx, int offse
         const auto ty = ImGui::GetTextLineHeight();
 
         char buf[64];
-        sprintf( buf, "%s context %i", GpuContextNames[(int)m_gpu->gtype], m_idx );
+        sprintf( buf, "%s context %i", ZoneContextNames[(int)m_gpu->type], m_idx );
         draw->AddText( ctx.wpos + ImVec2( ty * 1.5f + labelWidth, offset ), HeaderColorInactive(), buf );
     }
 }
