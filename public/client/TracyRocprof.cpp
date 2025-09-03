@@ -451,6 +451,7 @@ void calibration_thread( void* ptr )
 {
     while( !TracyIsStarted )
         ;
+    SetThreadName( "rocprofiler calibration" );
     ToolData* data = static_cast<ToolData*>( ptr );
     data->context_id = gpu_context_allocate( data );
     const char* user_counters = GetEnvVar( "TRACY_ROCPROF_COUNTERS" );

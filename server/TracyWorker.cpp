@@ -5830,14 +5830,14 @@ void Worker::ProcessGpuZoneBeginImplCommon( ZoneEvent* zone, const QueueGpuZoneB
 
 void Worker::ProcessGpuZoneBegin( const QueueGpuZoneBegin& ev, bool serial )
 {
-    auto zone = m_slab.Alloc<ZoneEvent>();
+    auto zone = AllocZoneEvent();
     RequestZoneExtra(*zone);
     ProcessGpuZoneBeginImpl( zone, ev, serial );
 }
 
 void Worker::ProcessGpuZoneBeginCallstack( const QueueGpuZoneBegin& ev, bool serial )
 {
-    auto zone = m_slab.Alloc<ZoneEvent>();
+    auto zone = AllocZoneEvent();
     auto extra = RequestZoneExtra(*zone);
     ProcessGpuZoneBeginImpl( zone, ev, serial );
     if( serial )
@@ -5858,14 +5858,14 @@ void Worker::ProcessGpuZoneBeginCallstack( const QueueGpuZoneBegin& ev, bool ser
 
 void Worker::ProcessGpuZoneBeginAllocSrcLoc( const QueueGpuZoneBeginLean& ev, bool serial )
 {
-    auto zone = m_slab.Alloc<ZoneEvent>();
+    auto zone = AllocZoneEvent();
     RequestZoneExtra(*zone);
     ProcessGpuZoneBeginAllocSrcLocImpl( zone, ev, serial );
 }
 
 void Worker::ProcessGpuZoneBeginAllocSrcLocCallstack( const QueueGpuZoneBeginLean& ev, bool serial )
 {
-    auto zone = m_slab.Alloc<ZoneEvent>();
+    auto zone = AllocZoneEvent();
     auto extra = RequestZoneExtra(*zone);
     ProcessGpuZoneBeginAllocSrcLocImpl( zone, ev, serial );
     if( serial )

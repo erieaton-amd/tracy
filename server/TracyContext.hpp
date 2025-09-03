@@ -109,7 +109,7 @@ public:
     StringIdx name;
     ZoneContextType type;
     unordered_flat_map<uint64_t, ThreadData*> threadData;
-    Vector<ThreadData*> threads; // TODO: delete me?
+    Vector<ThreadData*> threads;
     uint64_t count;
     unordered_flat_map<int64_t, StringIdx> noteNames;
     unordered_flat_map<uint16_t, unordered_flat_map<int64_t, double>> notes;
