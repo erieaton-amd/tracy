@@ -5767,7 +5767,7 @@ void Worker::ProcessGpuZoneBeginImplCommon( ZoneEvent* zone, const QueueGpuZoneB
     {
         cpuTime = RefTime( GetDefaultCtx().refTimeThread, ev.cpuTime );
     }
-    auto zoneExtra = GetZoneExtra(*zone);
+    auto& zoneExtra = GetZoneExtraMutable(*zone);
 
     const auto time = TscTime( cpuTime );
     zoneExtra.otherStart.SetVal( time );
@@ -5894,7 +5894,7 @@ void Worker::ProcessGpuZoneEnd( const QueueGpuZoneEnd& ev, bool serial )
 
     assert( !td->second->stack.empty() );
     auto zone = td->second->stack.back_and_pop();
-    auto extra = GetZoneExtra(*zone);
+    auto& extra = GetZoneExtraMutable(*zone);
 
     assert( !ctx->query[ev.queryId] );
     ctx->query[ev.queryId] = zone;
