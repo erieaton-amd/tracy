@@ -386,6 +386,7 @@ private:
 
     void Attention( bool& alreadyDone );
     void UpdateTitle();
+    void ContextCombo( const std::string* ctxName, uint8_t* ctxIdx );
 
     unordered_flat_map<uint64_t, int> m_threadDepthLimit;
     unordered_flat_map<uint64_t, bool> m_visibleMsgThread;
@@ -520,11 +521,11 @@ private:
     bool m_showAnnotationList = false;
     bool m_showWaitStacks = false;
     bool m_showFlameGraph = false;
-    std::string m_flameCtxName;
+    std::string* m_flameCtxName;
     uint8_t m_flameCtx = 0;
 
     AccumulationMode m_statAccumulationMode = AccumulationMode::SelfOnly;
-    std::string m_statCtxName;
+    std::string* m_statCtxName;
     uint8_t m_statCtx = 0;
     bool m_statSampleTime = true;
     int m_statMode = 0;

@@ -107,6 +107,7 @@ private:
 
 public:
     StringIdx name;
+    std::string longName;
     ZoneContextType type;
     unordered_flat_map<uint64_t, ThreadData*> threadData;
     Vector<ThreadData*> threads;

@@ -495,8 +495,8 @@ public:
     tracy_force_inline const ZoneContext& GetDefaultCtx() const { assert(m_defaultCtx < UINT8_MAX); return *m_ctxMap[m_defaultCtx]; }
     tracy_force_inline ZoneContext& GetDefaultCtx() { assert(m_defaultCtx < UINT8_MAX); return *m_ctxMap[m_defaultCtx]; }
     const Vector<ZoneContext*>& GetCtxData() const { return m_data.contexts; }
-    const std::string GetCtxName( ZoneContext* ctx ) const;
-    const std::string GetCtxName( uint8_t idx ) const;
+    const std::string& GetCtxName( ZoneContext* ctx ) const;
+    const std::string& GetCtxName( uint8_t idx ) const;
     const Vector<PlotData*>& GetPlots() const { return m_data.plots.Data(); }
     const MemData& GetMemoryNamed( uint64_t name ) const;
     const unordered_flat_map<uint64_t, MemData*>& GetMemNameMap() const { return m_data.memNameMap; }

@@ -3469,8 +3469,9 @@ ThreadData* Worker::GetCurrentThreadData()
     return td;
 }
 
-const std::string Worker::GetCtxName( ZoneContext* ctx ) const
+const std::string& Worker::GetCtxName( ZoneContext* ctx ) const
 {
+    static std::string unknown = "Unknown";
     for( uint8_t idx = 0; idx < m_data.contexts.size(); idx++ )
     {
         if( ctx == m_ctxMap[idx] )
@@ -3478,20 +3479,24 @@ const std::string Worker::GetCtxName( ZoneContext* ctx ) const
             return GetCtxName( idx );
         }
     }
-    return "Unknown";
+    return unknown;
 }
 
-const std::string Worker::GetCtxName( uint8_t idx ) const
+const std::string& Worker::GetCtxName( uint8_t idx ) const
 {
     auto ctx = m_data.contexts[idx];
-    std::stringstream ctxName;
-    ctxName << ZoneContextNames[(uint8_t)ctx->type];
-    ctxName << ":" << (unsigned)idx;
-    if( ctx->name.Active() )
+    if( ctx->longName.size() == 0 )
     {
-        ctxName << " " << GetString( ctx->name );
+        std::stringstream ctxName;
+        ctxName << ZoneContextNames[(uint8_t)ctx->type];
+        ctxName << ":" << (unsigned)idx;
+        if( ctx->name.Active() )
+        {
+            ctxName << " " << GetString( ctx->name );
+        }
+        ctx->longName = ctxName.str();
     }
-    return ctxName.str();
+    return ctx->longName;
 }
 
 const MemData& Worker::GetMemoryNamed( uint64_t name ) const

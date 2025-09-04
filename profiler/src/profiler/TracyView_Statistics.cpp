@@ -45,27 +45,8 @@ void View::DrawStatistics()
     ImGui::TextWrapped( "Collection of statistical data is disabled in this build." );
     ImGui::TextWrapped( "Rebuild without the TRACY_NO_STATISTICS macro to enable statistics view." );
 #else
-    auto& ctxs = m_worker.GetCtxData();
-    if( m_statCtxName.empty() )
-    {
-        m_statCtxName = m_worker.GetCtxName( m_statCtx );
-    }
-    // TODO: Get a better width
-    ImGui::SetNextItemWidth( ImGui::CalcTextSize( "GPU:1 rocprofv3" ).x + ImGui::GetTextLineHeight() * 2 );
-    if( ImGui::BeginCombo( "##zonestatsctx", m_statCtxName.c_str() ) )
-    {
-        for( uint8_t i = 0; i < ctxs.size(); i++ )
-        {
-            std::string ctxName = m_worker.GetCtxName( i );
-            if( ImGui::Selectable( ctxName.c_str() ) )
-            {
-                m_statCtx = i;
-                m_statCtxName = ctxName;
-            }
-        }
-        ImGui::EndCombo();
-    }
-    auto ctx = ctxs[m_statCtx];
+    ContextCombo( m_statCtxName, &m_statCtx );
+    auto ctx = m_worker.GetCtxData()[m_statCtx];
 
     ImGui::SameLine();
 

@@ -735,31 +735,8 @@ void View::DrawFlameGraph()
     ImGui::Begin( "Flame graph", &m_showFlameGraph, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse );
     if( ImGui::GetCurrentWindowRead()->SkipItems ) { ImGui::End(); return; }
 
-    auto& ctxs = m_worker.GetCtxData();
-    if( m_flameCtxName.empty() )
-    {
-        m_flameCtxName = m_worker.GetCtxName( m_flameCtx );
-    }
-    // TODO: Get a better width
-    ImGui::SetNextItemWidth( ImGui::CalcTextSize( "GPU:1 rocprofv3" ).x + ImGui::GetTextLineHeight() * 2 );
-    if( ImGui::BeginCombo( "##zonestatsctx", m_flameCtxName.c_str() ) )
-    {
-        for( uint8_t i = 0; i < ctxs.size(); i++ )
-        {
-            std::string ctxName = m_worker.GetCtxName( i );
-            if( ImGui::Selectable( ctxName.c_str() ) )
-            {
-                if( i != m_flameCtx )
-                {
-                    m_flameGraphInvariant.Reset();
-                }
-                m_flameCtx = i;
-                m_flameCtxName = ctxName;
-            }
-        }
-        ImGui::EndCombo();
-    }
-    auto ctx = ctxs[m_flameCtx];
+    ContextCombo( m_flameCtxName, &m_flameCtx );
+    auto ctx = m_worker.GetCtxData()[m_flameCtx];
 
     ImGui::SameLine();
 

@@ -770,4 +770,42 @@ void View::UpdateTitle()
     }
 }
 
+void View::ContextCombo( const std::string* ctxName, uint8_t* ctxIdx )
+{
+    auto& ctxs = m_worker.GetCtxData();
+    if( ctxName == nullptr || ctxName->empty() )
+    {
+        ctxName = &m_worker.GetCtxName( *ctxIdx );
+    }
+
+    float ctxComboWidth = 0.0f;
+    for( uint8_t i = 0; i < ctxs.size(); i++ )
+    {
+        float width = ImGui::CalcTextSize( m_worker.GetCtxName( i ).c_str() ).x + ImGui::GetTextLineHeight() * 2;
+        if( width > ctxComboWidth )
+        {
+            ctxComboWidth = width;
+        }
+    }
+
+    ImGui::SetNextItemWidth( ctxComboWidth );
+    if( ImGui::BeginCombo( "##zonestatsctx", ctxName->c_str() ) )
+    {
+        for( uint8_t i = 0; i < ctxs.size(); i++ )
+        {
+            const std::string* name = &m_worker.GetCtxName( i );
+            if( ImGui::Selectable( name->c_str() ) )
+            {
+                if( i != *ctxIdx )
+                {
+                    m_flameGraphInvariant.Reset();
+                }
+                *ctxIdx = i;
+                ctxName = name;
+            }
+        }
+        ImGui::EndCombo();
+    }
+}
+
 }
