@@ -279,7 +279,6 @@ Worker::Worker( const char* addr, uint16_t port, int64_t memoryLimit )
     m_data.sourceLocationExpand.push_back( 0 );
     m_data.localThreadCompress.InitZero();
     m_data.callstackPayload.push_back( nullptr );
-    m_data.zoneExtra.push_back( ZoneExtra {} );
     m_data.symbolLocInline.push_back( std::numeric_limits<uint64_t>::max() );
     m_data.memory = m_slab.AllocInit<MemData>();
     m_data.memNameMap.emplace( 0, m_data.memory );
@@ -318,7 +317,6 @@ Worker::Worker( const char* name, const char* program, const std::vector<ImportE
     m_data.sourceLocationExpand.push_back( 0 );
     m_data.localThreadCompress.InitZero();
     m_data.callstackPayload.push_back( nullptr );
-    m_data.zoneExtra.push_back( ZoneExtra {} );
     m_data.symbolLocInline.push_back( std::numeric_limits<uint64_t>::max() );
     m_data.memory = m_slab.AllocInit<MemData>();
     m_data.memNameMap.emplace( 0, m_data.memory );
@@ -381,7 +379,7 @@ Worker::Worker( const char* name, const char* program, const std::vector<ImportE
 
             if( !v.text.empty() )
             {
-                auto& extra = RequestZoneExtra( *zone );
+                auto& extra = GetDefaultCtx().RequestZoneExtra( *zone );
                 extra.text = StringIdx( StoreString( v.text.c_str(), v.text.size() ).idx );
             }
 
@@ -997,8 +995,8 @@ Worker::Worker( FileRead& f, EventType::Type eventMask, bool bgTasks, bool allow
 
     f.Read( sz );
     assert( sz != 0 );
-    m_data.zoneExtra.reserve_exact( sz, m_slab );
-    f.Read( m_data.zoneExtra.data(), sz * sizeof( ZoneExtra ) );
+    GetDefaultCtx().zoneExtra.reserve_exact( sz, m_slab );
+    f.Read( GetDefaultCtx().zoneExtra.data(), sz * sizeof( ZoneExtra ) );
 
     s_loadProgress.progress.store( LoadProgress::Zones, std::memory_order_relaxed );
     f.Read( sz );
@@ -2521,17 +2519,17 @@ const char* Worker::GetZoneName( const SourceLocation& srcloc ) const
     }
 }
 
-const char* Worker::GetZoneName( const ZoneEvent& ev ) const
+const char* Worker::GetZoneName( const ZoneEventC ev ) const
 {
-    auto& srcloc = GetSourceLocation( ev.SrcLoc() );
+    auto& srcloc = GetSourceLocation( ev->SrcLoc() );
     return GetZoneName( ev, srcloc );
 }
 
-const char* Worker::GetZoneName( const ZoneEvent& ev, const SourceLocation& srcloc ) const
+const char* Worker::GetZoneName( const ZoneEventC ev, const SourceLocation& srcloc ) const
 {
-    if( HasZoneExtra( ev ) && GetZoneExtra( ev ).name.Active() )
+    if( ev->HasZoneExtra() && ev.Extra().name.Active() )
     {
-        return GetString( GetZoneExtra( ev ).name );
+        return GetString( ev.Extra().name );
     }
     else if( srcloc.name.active )
     {
@@ -4827,7 +4825,7 @@ void Worker::ProcessZoneBeginCallstack( const QueueZoneBegin& ev )
     auto td = GetCurrentThreadData();
     auto it = m_nextCallstack.find( td->id );
     assert( it != m_nextCallstack.end() );
-    auto& extra = RequestZoneExtra( *zone );
+    auto& extra = GetDefaultCtx().RequestZoneExtra( *zone );
     extra.callstack.SetVal( it->second );
     it->second = 0;
 }
@@ -4845,7 +4843,7 @@ void Worker::ProcessZoneBeginAllocSrcLocCallstack( const QueueZoneBeginLean& ev 
     auto td = GetCurrentThreadData();
     auto it = m_nextCallstack.find( td->id );
     assert( it != m_nextCallstack.end() );
-    auto& extra = RequestZoneExtra( *zone );
+    auto& extra = GetDefaultCtx().RequestZoneExtra( *zone );
     extra.callstack.SetVal( it->second );
     it->second = 0;
 }
@@ -5254,7 +5252,7 @@ void Worker::ProcessZoneText()
     td->nextZoneId = 0;
     auto& stack = td->stack;
     auto zone = stack.back();
-    auto& extra = RequestZoneExtra( *zone );
+    auto& extra = GetDefaultCtx().RequestZoneExtra( *zone );
     if( !extra.text.Active() )
     {
         extra.text = StringIdx( idx );
@@ -5298,7 +5296,7 @@ void Worker::ProcessZoneName()
     td->nextZoneId = 0;
     auto& stack = td->stack;
     auto zone = stack.back();
-    auto& extra = RequestZoneExtra( *zone );
+    auto& extra = GetDefaultCtx().RequestZoneExtra( *zone );
     extra.name = StringIdx( GetSingleStringIdx() );
 }
 
@@ -5320,7 +5318,7 @@ void Worker::ProcessZoneColor( const QueueZoneColor& ev )
     td->nextZoneId = 0;
     auto& stack = td->stack;
     auto zone = stack.back();
-    auto& extra = RequestZoneExtra( *zone );
+    auto& extra = GetDefaultCtx().RequestZoneExtra( *zone );
     const uint32_t color = ( ev.b << 16 ) | ( ev.g << 8 ) | ev.r;
     extra.color = color;
 }
@@ -5346,7 +5344,7 @@ void Worker::ProcessZoneValue( const QueueZoneValue& ev )
     td->nextZoneId = 0;
     auto& stack = td->stack;
     auto zone = stack.back();
-    auto& extra = RequestZoneExtra( *zone );
+    auto& extra = GetDefaultCtx().RequestZoneExtra( *zone );
     if( !extra.text.Active() )
     {
         extra.text = StringIdx( StoreString( tmp, tsz ).idx );
@@ -5772,7 +5770,7 @@ void Worker::ProcessGpuZoneBeginImplCommon( ZoneEvent* zone, const QueueGpuZoneB
     {
         cpuTime = RefTime( GetDefaultCtx().refTimeThread, ev.cpuTime );
     }
-    auto& zoneExtra = GetZoneExtraMutable(*zone);
+    auto& zoneExtra = ctx->GetZoneExtraMutable(*zone);
 
     const auto time = TscTime( cpuTime );
     zoneExtra.otherStart.SetVal( time );
@@ -5835,15 +5833,19 @@ void Worker::ProcessGpuZoneBeginImplCommon( ZoneEvent* zone, const QueueGpuZoneB
 
 void Worker::ProcessGpuZoneBegin( const QueueGpuZoneBegin& ev, bool serial )
 {
+    auto ctx = static_cast<GpuCtxData*>(m_ctxMap[ev.context].get());
+    assert( ctx );
     auto zone = AllocZoneEvent();
-    RequestZoneExtra(*zone);
+    ctx->RequestZoneExtra(*zone);
     ProcessGpuZoneBeginImpl( zone, ev, serial );
 }
 
 void Worker::ProcessGpuZoneBeginCallstack( const QueueGpuZoneBegin& ev, bool serial )
 {
+    auto ctx = static_cast<GpuCtxData*>(m_ctxMap[ev.context].get());
+    assert( ctx );
     auto zone = AllocZoneEvent();
-    auto extra = RequestZoneExtra(*zone);
+    auto extra = ctx->RequestZoneExtra(*zone);
     ProcessGpuZoneBeginImpl( zone, ev, serial );
     if( serial )
     {
@@ -5863,15 +5865,19 @@ void Worker::ProcessGpuZoneBeginCallstack( const QueueGpuZoneBegin& ev, bool ser
 
 void Worker::ProcessGpuZoneBeginAllocSrcLoc( const QueueGpuZoneBeginLean& ev, bool serial )
 {
+    auto ctx = static_cast<GpuCtxData*>(m_ctxMap[ev.context].get());
+    assert( ctx );
     auto zone = AllocZoneEvent();
-    RequestZoneExtra(*zone);
+    ctx->RequestZoneExtra(*zone);
     ProcessGpuZoneBeginAllocSrcLocImpl( zone, ev, serial );
 }
 
 void Worker::ProcessGpuZoneBeginAllocSrcLocCallstack( const QueueGpuZoneBeginLean& ev, bool serial )
 {
+    auto ctx = static_cast<GpuCtxData*>(m_ctxMap[ev.context].get());
+    assert( ctx );
     auto zone = AllocZoneEvent();
-    auto extra = RequestZoneExtra(*zone);
+    auto extra = ctx->RequestZoneExtra(*zone);
     ProcessGpuZoneBeginAllocSrcLocImpl( zone, ev, serial );
     if( serial )
     {
@@ -5899,7 +5905,7 @@ void Worker::ProcessGpuZoneEnd( const QueueGpuZoneEnd& ev, bool serial )
 
     assert( !td->second->stack.empty() );
     auto zone = td->second->stack.back_and_pop();
-    auto& extra = GetZoneExtraMutable(*zone);
+    auto& extra = ctx->GetZoneExtraMutable(*zone);
 
     assert( !ctx->query[ev.queryId] );
     ctx->query[ev.queryId] = zone;
@@ -8012,9 +8018,9 @@ void Worker::Write( FileWrite& f, bool fiDict )
         }
     }
 
-    sz = m_data.zoneExtra.size();
+    sz = GetDefaultCtx().zoneExtra.size();
     f.Write( &sz, sizeof( sz ) );
-    f.Write( m_data.zoneExtra.data(), sz * sizeof( ZoneExtra ) );
+    f.Write( GetDefaultCtx().zoneExtra.data(), sz * sizeof( ZoneExtra ) );
 
     sz = 0;
     for( auto& v : GetDefaultCtx().threads ) sz += v->count;
@@ -8534,27 +8540,6 @@ const Worker::CpuThreadTopology* Worker::GetThreadTopology( uint32_t cpuThread )
     auto it = m_data.cpuTopologyMap.find( cpuThread );
     if( it == m_data.cpuTopologyMap.end() ) return nullptr;
     return &it->second;
-}
-
-ZoneExtra& Worker::AllocZoneExtra( ZoneEvent& ev )
-{
-    assert( ev.extra == 0 );
-    ev.extra = uint32_t( m_data.zoneExtra.size() );
-    auto& extra = m_data.zoneExtra.push_next();
-    memset( (char*)&extra, 0, sizeof( extra ) );
-    return extra;
-}
-
-ZoneExtra& Worker::RequestZoneExtra( ZoneEvent& ev )
-{
-    if( !HasZoneExtra( ev ) )
-    {
-        return AllocZoneExtra( ev );
-    }
-    else
-    {
-        return GetZoneExtraMutable( ev );
-    }
 }
 
 void Worker::CacheSource( const StringRef& str, const StringIdx& image )

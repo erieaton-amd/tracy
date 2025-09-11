@@ -292,7 +292,7 @@ private:
     unordered_flat_map<uint64_t, MemCallstackFrameTree> GetCallstackFrameTreeBottomUp( const MemData& mem ) const;
     unordered_flat_map<uint64_t, MemCallstackFrameTree> GetCallstackFrameTreeTopDown( const MemData& mem ) const;
     void DrawFrameTreeLevel( const unordered_flat_map<uint64_t, MemCallstackFrameTree>& tree, int& idx );
-    void DrawZoneList( int id, const Vector<short_ptr<ZoneEvent>>& zones );
+    void DrawZoneList( int id, const Vector<short_ptr<ZoneEvent>>& zones, const ZoneContext* zoneCtx );
 
     unordered_flat_map<uint64_t, CallstackFrameTree> GetCallstackFrameTreeBottomUp( const unordered_flat_map<uint32_t, uint64_t>& stacks, bool group ) const;
     unordered_flat_map<uint64_t, CallstackFrameTree> GetCallstackFrameTreeTopDown( const unordered_flat_map<uint32_t, uint64_t>& stacks, bool group ) const;
@@ -321,34 +321,32 @@ private:
     uint32_t GetThreadColor( uint64_t thread, int depth );
     uint32_t GetSrcLocColor( const SourceLocation& srcloc, int depth );
     uint32_t GetRawSrcLocColor( const SourceLocation& srcloc, int depth );
-    uint32_t GetZoneColor( const ZoneEvent& ev, uint64_t thread, int depth );
-  //uint32_t GetZoneColor( const GpuEvent& ev );
-    ZoneColorData GetZoneColorData( const ZoneEvent& ev, uint64_t thread, int depth, uint32_t inheritedColor );
-  //ZoneColorData GetZoneColorData( const GpuEvent& ev );
+    uint32_t GetZoneColor( const ZoneEventC ev, uint64_t thread, int depth );
+    ZoneColorData GetZoneColorData( const ZoneEventC ev, uint64_t thread, int depth, uint32_t inheritedColor );
 
     void ZoomToZone( const ZoneEvent& ev );
     void ZoomToPrevFrame();
     void ZoomToNextFrame();
     void CenterAtTime( int64_t t );
 
-    void ShowZoneInfo( const ZoneEvent& ev );
+    void ShowZoneInfo( const ZoneEventC& ev );
 
-    void ZoneTooltip( const ZoneEvent& ev, const ThreadData& thread );
-  //void ZoneTooltip( const GpuEvent& ev );
+    void ZoneTooltip( const ZoneEventCT zct );
     void CallstackTooltip( uint32_t idx );
     void CallstackTooltipContents( uint32_t idx );
     void CrashTooltip();
 
-    const ZoneEvent* GetZoneParent( const ZoneEvent& zone ) const;
-    const ZoneEvent* GetZoneParent( const ZoneEvent& zone, uint64_t tid ) const;
+    const ZoneEventCT GetZoneParent( const ZoneEventCT zone ) const;
+    const ZoneEventCT GetZoneParent( const ZoneEventC zone ) const;
+    const ZoneEventCT GetZoneParent( const ZoneEventC zone, uint64_t tid ) const;
     const ZoneEvent* GetZoneChild( const ZoneEvent& zone, int64_t time ) const;
     bool IsZoneReentry( const ZoneEvent& zone ) const;
     bool IsZoneReentry( const ZoneEvent& zone, uint64_t tid, const ZoneContext* ctx ) const;
   //const GpuEvent* GetZoneParent( const GpuEvent& zone ) const;
-    const ThreadData* GetZoneThreadData( const ZoneEvent& zone ) const;
-    const ZoneContext* GetZoneCtx( const ZoneEvent& zone ) const;
+    const ZoneEventCT GetZoneThreadData( const ZoneEventC zone ) const;
+    const ZoneEventCT GetZoneThreadData( const ZoneEvent& zone ) const;
     bool FindMatchingZone( int prev0, int prev1, int flags );
-    const pair<const ZoneEvent*, const ThreadData*> FindZoneAtTime( uint64_t thread, int64_t time ) const;
+    const ZoneEventCT FindZoneAtTime( uint64_t thread, int64_t time ) const;
     uint64_t GetFrameNumber( const FrameData& fd, int i ) const;
     const char* GetFrameText( const FrameData& fd, int i, uint64_t ftime ) const;
     const char* GetFrameSetName( const FrameData& fd ) const;
@@ -462,7 +460,7 @@ private:
     TimelineController m_tc;
     KeyboardNavigation m_kbNavCtrl;
 
-    const ZoneEvent* m_zoneInfoWindow = nullptr;
+    ZoneEventC m_zoneInfoWindow = { nullptr, nullptr };
     const ZoneEvent* m_zoneHighlight;
     DecayValue<int16_t> m_zoneSrcLocHighlight = 0;
     LockHighlight m_lockHighlight { -1 };
@@ -569,8 +567,7 @@ private:
     BuzzAnim<uint32_t> m_lockInfoAnim;
     BuzzAnim<uint32_t> m_statBuzzAnim;
 
-    Vector<const ZoneEvent*> m_zoneInfoStack;
-  //Vector<const GpuEvent*> m_gpuInfoStack;
+    Vector<const ZoneEventC> m_zoneInfoStack;
 
     SourceContents m_srcHintCache;
     std::unique_ptr<SourceView> m_sourceView;
@@ -777,7 +774,7 @@ private:
         }
     } m_findZone;
 
-    tracy_force_inline uint64_t GetSelectionTarget( const ZoneContext::ZoneThreadData& ev, FindZone::GroupBy groupBy ) const;
+    tracy_force_inline uint64_t GetSelectionTarget( const ZoneContext::ZoneThreadData& ev, FindZone::GroupBy groupBy, const ZoneContext* ctx ) const;
 
     struct CompVal
     {

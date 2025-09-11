@@ -234,7 +234,6 @@ private:
         Vector<ZoneContext*> contexts;
         Vector<short_ptr<MessageData>> messages;
         StringDiscovery<PlotData*> plots;
-        Vector<ZoneExtra> zoneExtra;
         MemData* memory;
         unordered_flat_map<uint64_t, MemData*> memNameMap;
         uint64_t zonesCnt = 0;
@@ -436,7 +435,6 @@ public:
     int64_t GetFirstTime() const;
     int64_t GetLastTime() const { return m_data.lastTime; }
     uint64_t GetZoneCount() const { return m_data.zonesCnt; }
-    uint64_t GetZoneExtraCount() const { return m_data.zoneExtra.size() - 1; }
     uint64_t GetGpuZoneCount() const { return m_data.gpuCnt; }
     uint64_t GetLockCount() const;
     uint64_t GetPlotCount() const;
@@ -547,8 +545,8 @@ public:
     std::pair<const char*, const char*> GetExternalName( uint64_t id ) const;
 
     const char* GetZoneName( const SourceLocation& srcloc ) const;
-    const char* GetZoneName( const ZoneEvent& ev ) const;
-    const char* GetZoneName( const ZoneEvent& ev, const SourceLocation& srcloc ) const;
+    const char* GetZoneName( const ZoneEventC ev ) const;
+    const char* GetZoneName( const ZoneEventC ev, const SourceLocation& srcloc ) const;
 
     tracy_force_inline const Vector<short_ptr<ZoneEvent>>& GetZoneChildren( int32_t idx ) const { return m_data.zoneChildren[idx]; }
     tracy_force_inline Vector<short_ptr<ZoneEvent>>& GetZoneChildren( int32_t idx ) { return m_data.zoneChildren[idx]; }
@@ -556,9 +554,6 @@ public:
     tracy_force_inline const Vector<GhostZone>& GetGhostChildren( int32_t idx ) const { return m_data.ghostChildren[idx]; }
     tracy_force_inline const GhostKey& GetGhostFrame( const Int24& frame ) const { return m_data.ghostFrames[frame.Val()]; }
 #endif
-
-    tracy_force_inline const bool HasZoneExtra( const ZoneEvent& ev ) const { return ev.extra != 0; }
-    tracy_force_inline const ZoneExtra& GetZoneExtra( const ZoneEvent& ev ) const { return m_data.zoneExtra[ev.extra]; }
 
     std::vector<int16_t> GetMatchingSourceLocation( const char* query, bool ignoreCase ) const;
 
@@ -867,10 +862,6 @@ private:
 #else
     tracy_force_inline void CountZoneStatistics( ZoneEvent* zone );
 #endif
-
-    tracy_force_inline ZoneExtra& GetZoneExtraMutable( const ZoneEvent& ev ) { return m_data.zoneExtra[ev.extra]; }
-    tracy_force_inline ZoneExtra& AllocZoneExtra( ZoneEvent& ev );
-    tracy_force_inline ZoneExtra& RequestZoneExtra( ZoneEvent& ev );
 
     int64_t GetZoneEndImpl( const ZoneEvent& ev ) const;
 

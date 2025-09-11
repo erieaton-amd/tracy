@@ -114,10 +114,13 @@ public:
     uint64_t count;
     unordered_flat_map<int64_t, StringIdx> noteNames;
     unordered_flat_map<uint16_t, unordered_flat_map<int64_t, double>> notes;
+    Vector<ZoneExtra> zoneExtra;
 
     uint64_t threadCtx = 0;
     ThreadData* threadCtxData = nullptr;
     int64_t refTimeThread = 0;
+
+    ZoneContext() { zoneExtra.push_back( ZoneExtra {} ); }
 
     const ThreadData* GetThreadData( uint64_t tid ) const;
 
@@ -126,6 +129,31 @@ public:
     const unordered_flat_map<int16_t, SourceLocationZones>& GetSourceLocationZones() const { return sourceLocationZones; }
     bool AreSourceLocationZonesReady() const { return sourceLocationZonesReady; }
     void SetSourceLocationZonesReady() { sourceLocationZonesReady = true; }
+
+    tracy_force_inline const bool HasZoneExtra( const ZoneEvent& ev ) const { return ev.extra != 0; }
+    uint64_t GetZoneExtraCount() const { return zoneExtra.size() - 1; }
+    tracy_force_inline const ZoneExtra& GetZoneExtra( const ZoneEvent& ev ) const { return zoneExtra[ev.extra]; }
+    tracy_force_inline ZoneExtra& GetZoneExtraMutable( const ZoneEvent& ev ) { return zoneExtra[ev.extra]; }
+    tracy_force_inline ZoneExtra& AllocZoneExtra( ZoneEvent& ev )
+    {
+        assert( ev.extra == 0 );
+        ev.extra = uint32_t( zoneExtra.size() );
+        auto& extra = zoneExtra.push_next();
+        memset( (char*)&extra, 0, sizeof( extra ) );
+        return extra;
+    }
+
+    tracy_force_inline ZoneExtra& RequestZoneExtra( ZoneEvent& ev )
+    {
+        if( !HasZoneExtra( ev ) )
+        {
+            return AllocZoneExtra( ev );
+        }
+        else
+        {
+            return GetZoneExtraMutable( ev );
+        }
+    }
 
 #ifndef TRACY_NO_STATISTICS
     SourceLocationZones* GetSourceLocationZones( uint16_t srcloc )
@@ -170,7 +198,6 @@ struct GpuCtxData : public ZoneContext
 {
     int64_t timeDiff;
     uint64_t thread;
-  // uint64_t count;
     float period;
     bool hasPeriod;
     bool hasCalibration;
@@ -180,16 +207,32 @@ struct GpuCtxData : public ZoneContext
     int64_t lastGpuTime;
     uint64_t overflow;
     uint32_t overflowMul;
-  // StringIdx name;
-  // unordered_flat_map<uint64_t, GpuCtxThreadData> threadData;
-    //  unordered_flat_map<int64_t, StringIdx> noteNames;
-    //  unordered_flat_map<uint16_t, unordered_flat_map<int64_t, double>> notes;
     short_ptr<ZoneEvent> query[64 * 1024];
 };
 
 enum
 {
     GpuCtxDataSize = sizeof( GpuCtxData )
+};
+
+// Used to carry the context of a zone around with the zone. This information is not stored in the
+// zone for space reasons, and is expensive to recover. This struct needs to remain small because it
+// is passed by value.
+struct ZoneEventC
+{
+    const ZoneEvent *event = nullptr;
+    const ZoneContext *ctx = nullptr;
+
+    // assume no ZoneEvents appear in two contexts, and save a comparison
+    tracy_force_inline bool operator==(const ZoneEventC& other) const { return other.event == event; }
+    tracy_force_inline operator bool() const { return event == nullptr; }
+    tracy_force_inline const ZoneExtra& Extra() const { return ctx->GetZoneExtra( *event ); }
+    tracy_force_inline const ZoneEvent* operator->() const { return event; }
+};
+
+struct ZoneEventCT : public ZoneEventC
+{
+    const ThreadData *thread = nullptr;
 };
 
 } // namespace tracy

@@ -213,6 +213,7 @@ struct ZoneEvent
     tracy_force_inline int32_t Child() const { int32_t child; memcpy( &child, &_child2, 4 ); return child; }
     tracy_force_inline void SetChild( int32_t child ) { memcpy( &_child2, &child, 4 ); }
     tracy_force_inline bool HasChildren() const { uint8_t tmp; memcpy( &tmp, ((char*)&_end_child1)+1, 1 ); return ( tmp >> 7 ) == 0; }
+    tracy_force_inline bool HasZoneExtra() const { return extra != 0; }
 
     tracy_force_inline void SetStartSrcLoc( int64_t start, int16_t srcloc ) { assert( start < (int64_t)( 1ull << 47 ) ); start <<= 16; start |= uint16_t( srcloc ); memcpy( &_start_srcloc, &start, 8 ); }
 

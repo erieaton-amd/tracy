@@ -597,11 +597,11 @@ void View::DrawMemoryAllocWindow()
 
         bool sep = false;
         auto zoneAlloc = FindZoneAtTime( tidAlloc, ev.TimeAlloc() );
-        if( zoneAlloc.first )
+        if( zoneAlloc )
         {
             ImGui::Separator();
             sep = true;
-            const auto& srcloc = m_worker.GetSourceLocation( zoneAlloc.first->SrcLoc() );
+            const auto& srcloc = m_worker.GetSourceLocation( zoneAlloc->SrcLoc() );
             const auto txt = srcloc.name.active ? m_worker.GetString( srcloc.name ) : m_worker.GetString( srcloc.function );
             ImGui::PushID( idx++ );
             TextFocused( "Zone alloc:", txt );
@@ -609,41 +609,41 @@ void View::DrawMemoryAllocWindow()
             ImGui::PopID();
             if( ImGui::IsItemClicked() )
             {
-                ShowZoneInfo( *zoneAlloc.first );
+                ShowZoneInfo( zoneAlloc );
             }
             if( hover )
             {
-                m_zoneHighlight = zoneAlloc.first;
+                m_zoneHighlight = zoneAlloc.event;
                 if( IsMouseClicked( 2 ) )
                 {
-                    ZoomToZone( *zoneAlloc.first );
+                    ZoomToZone( *zoneAlloc.event );
                 }
-                ZoneTooltip( *zoneAlloc.first, *zoneAlloc.second );
+                ZoneTooltip( zoneAlloc );
             }
         }
 
         if( ev.TimeFree() >= 0 )
         {
             auto zoneFree = FindZoneAtTime( tidFree, ev.TimeFree() );
-            if( zoneFree.first )
+            if( zoneFree )
             {
                 if( !sep ) ImGui::Separator();
-                const auto& srcloc = m_worker.GetSourceLocation( zoneFree.first->SrcLoc() );
+                const auto& srcloc = m_worker.GetSourceLocation( zoneFree->SrcLoc() );
                 const auto txt = srcloc.name.active ? m_worker.GetString( srcloc.name ) : m_worker.GetString( srcloc.function );
                 TextFocused( "Zone free:", txt );
                 auto hover = ImGui::IsItemHovered();
                 if( ImGui::IsItemClicked() )
                 {
-                    ShowZoneInfo( *zoneFree.first );
+                    ShowZoneInfo( zoneFree );
                 }
                 if( hover )
                 {
-                    m_zoneHighlight = zoneFree.first;
+                    m_zoneHighlight = zoneFree.event;
                     if( IsMouseClicked( 2 ) )
                     {
-                        ZoomToZone( *zoneFree.first );
+                        ZoomToZone( *zoneFree.event );
                     }
-                    ZoneTooltip( *zoneFree.first, *zoneAlloc.second );
+                    ZoneTooltip( zoneFree );
                 }
                 if( zoneAlloc == zoneFree )
                 {

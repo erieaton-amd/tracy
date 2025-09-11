@@ -12,7 +12,7 @@ namespace tracy
 class TimelineItemThread final : public TimelineItem
 {
 public:
-    TimelineItemThread( View& view, Worker& worker, const ThreadData* plot );
+    TimelineItemThread( View& view, Worker& worker, const ThreadData* plot, const ZoneContext* ctx );
 
 protected:
     uint32_t HeaderColor() const override;
@@ -50,6 +50,7 @@ private:
     void PreprocessLocks( const TimelineContext& ctx, const unordered_flat_map<uint32_t, LockMap*>& locks, uint32_t tid, TaskDispatch& td, bool visible );
 
     const ThreadData* m_thread;
+    const ZoneContext* m_zoneCtx;
     bool m_ghost;
 
     std::vector<SamplesDraw> m_samplesDraw;

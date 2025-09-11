@@ -18,9 +18,10 @@ constexpr float MinVisSize = 3;
 constexpr float MinCtxSize = 4;
 
 
-TimelineItemThread::TimelineItemThread( View& view, Worker& worker, const ThreadData* thread )
+TimelineItemThread::TimelineItemThread( View& view, Worker& worker, const ThreadData* thread, const ZoneContext* ctx )
     : TimelineItem( view, worker, thread, true )
     , m_thread( thread )
+    , m_zoneCtx( ctx )
     , m_ghost( false )
 {
     auto name = worker.GetThreadName( thread->id );
@@ -221,7 +222,7 @@ void TimelineItemThread::HeaderTooltip( const char* label ) const
     {
         TextFocused( "Running state regions:", RealToString( ctx->v.size() ) );
     }
-    if( m_thread->ctx->type != ZoneContextType::CPU )
+    if( m_zoneCtx->type != ZoneContextType::CPU )
     {
         auto cpu_thread = static_cast<const CPUThreadData*>( m_thread );
         if( !cpu_thread->samples.empty() )
@@ -491,9 +492,9 @@ int TimelineItemThread::PreprocessZoneLevel( const TimelineContext& ctx, const V
             if( m_view.GetViewData().inheritParentColors )
             {
                 uint32_t color = 0;
-                if( m_worker.HasZoneExtra( ev ) )
+                if( ev.HasZoneExtra() )
                 {
-                    const auto& extra = m_worker.GetZoneExtra( ev );
+                    const auto& extra = m_zoneCtx->GetZoneExtra( ev );
                     color = extra.color.Val();
                 }
                 if( color == 0 )

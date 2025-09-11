@@ -40,7 +40,7 @@ void View::FindZones()
 }
 #endif
 
-uint64_t View::GetSelectionTarget( const ZoneContext::ZoneThreadData& ev, FindZone::GroupBy groupBy ) const
+uint64_t View::GetSelectionTarget( const ZoneContext::ZoneThreadData& ev, FindZone::GroupBy groupBy, const ZoneContext* ctx ) const
 {
     switch( groupBy )
     {
@@ -49,22 +49,22 @@ uint64_t View::GetSelectionTarget( const ZoneContext::ZoneThreadData& ev, FindZo
     case FindZone::GroupBy::UserText:
     {
         const auto& zone = *ev.Zone();
-        if( !m_worker.HasZoneExtra( zone ) ) return std::numeric_limits<uint64_t>::max();
-        const auto& extra = m_worker.GetZoneExtra( zone );
+        if( !zone.HasZoneExtra() ) return std::numeric_limits<uint64_t>::max();
+        const auto& extra = ctx->GetZoneExtra( zone );
         return extra.text.Active() ? extra.text.Idx() : std::numeric_limits<uint64_t>::max();
     }
     case FindZone::GroupBy::ZoneName:
     {
         const auto& zone = *ev.Zone();
-        if( !m_worker.HasZoneExtra( zone ) ) return std::numeric_limits<uint64_t>::max();
-        const auto& extra = m_worker.GetZoneExtra( zone );
+        if( !zone.HasZoneExtra() ) return std::numeric_limits<uint64_t>::max();
+        const auto& extra = ctx->GetZoneExtra( zone );
         return extra.name.Active() ? extra.name.Idx() : std::numeric_limits<uint64_t>::max();
     }
     case FindZone::GroupBy::Callstack:
-        return m_worker.GetZoneExtra( *ev.Zone() ).callstack.Val();
+        return ctx->GetZoneExtra( *ev.Zone() ).callstack.Val();
     case FindZone::GroupBy::Parent:
     {
-        const auto parent = GetZoneParent( *ev.Zone(), m_worker.DecompressThread( ev.Thread() ) );
+        const auto parent = GetZoneParent( { ev.Zone(), ctx }, m_worker.DecompressThread( ev.Thread() ) );
         return parent ? uint64_t( parent->SrcLoc() ) : 0;
     }
     case FindZone::GroupBy::NoGrouping:
@@ -75,7 +75,7 @@ uint64_t View::GetSelectionTarget( const ZoneContext::ZoneThreadData& ev, FindZo
     }
 }
 
-void View::DrawZoneList( int id, const Vector<short_ptr<ZoneEvent>>& zones )
+void View::DrawZoneList( int id, const Vector<short_ptr<ZoneEvent>>& zones, const ZoneContext* zoneCtx )
 {
     const auto zsz = zones.size();
     char buf[32];
@@ -171,20 +171,20 @@ void View::DrawZoneList( int id, const Vector<short_ptr<ZoneEvent>>& zones )
         case 2:
             if( sortspec.SortDirection == ImGuiSortDirection_Descending )
             {
-                pdqsort_branchless( sortedZones.begin(), sortedZones.end(), [this]( const auto& lhs, const auto& rhs ) {
-                    const auto hle = m_worker.HasZoneExtra( *lhs );
-                    const auto hre = m_worker.HasZoneExtra( *rhs );
+                pdqsort_branchless( sortedZones.begin(), sortedZones.end(), [this, zoneCtx]( const auto& lhs, const auto& rhs ) {
+                    const auto hle = lhs->HasZoneExtra();
+                    const auto hre = rhs->HasZoneExtra();
                     if( !( hle & hre ) ) return hle > hre;
-                    return strcmp( m_worker.GetString( m_worker.GetZoneExtra( *lhs ).name ), m_worker.GetString( m_worker.GetZoneExtra( *rhs ).name ) ) < 0;
+                    return strcmp( m_worker.GetString( zoneCtx->GetZoneExtra( *lhs ).name ), m_worker.GetString( zoneCtx->GetZoneExtra( *rhs ).name ) ) < 0;
                     } );
             }
             else
             {
-                pdqsort_branchless( sortedZones.begin(), sortedZones.end(), [this]( const auto& lhs, const auto& rhs ) {
-                    const auto hle = m_worker.HasZoneExtra( *lhs );
-                    const auto hre = m_worker.HasZoneExtra( *rhs );
+                pdqsort_branchless( sortedZones.begin(), sortedZones.end(), [this, zoneCtx]( const auto& lhs, const auto& rhs ) {
+                    const auto hle = lhs->HasZoneExtra();
+                    const auto hre = rhs->HasZoneExtra();
                     if( !( hle & hre ) ) return hle < hre;
-                    return strcmp( m_worker.GetString( m_worker.GetZoneExtra( *lhs ).name ), m_worker.GetString( m_worker.GetZoneExtra( *rhs ).name ) ) > 0;
+                    return strcmp( m_worker.GetString( zoneCtx->GetZoneExtra( *lhs ).name ), m_worker.GetString( zoneCtx->GetZoneExtra( *rhs ).name ) ) > 0;
                     } );
             }
             break;
@@ -220,9 +220,9 @@ void View::DrawZoneList( int id, const Vector<short_ptr<ZoneEvent>>& zones )
 
             ImGui::PushID( ev );
             if( m_zoneHover == ev ) ImGui::PushStyleColor( ImGuiCol_Text, ImVec4( 0, 1, 0, 1 ) );
-            if( ImGui::Selectable( TimeToStringExact( ev->Start() ), m_zoneInfoWindow == ev, ImGuiSelectableFlags_SpanAllColumns ) )
+            if( ImGui::Selectable( TimeToStringExact( ev->Start() ), m_zoneInfoWindow.event == ev, ImGuiSelectableFlags_SpanAllColumns ) )
             {
-                ShowZoneInfo( *ev );
+                ShowZoneInfo( { ev, zoneCtx } );
             }
             if( ImGui::IsItemHovered() )
             {
@@ -238,9 +238,9 @@ void View::DrawZoneList( int id, const Vector<short_ptr<ZoneEvent>>& zones )
             ImGui::TableNextColumn();
             ImGui::TextUnformatted( TimeToString( timespan ) );
             ImGui::TableNextColumn();
-            if( m_worker.HasZoneExtra( *ev ) )
+            if( ev->HasZoneExtra() )
             {
-                const auto& extra = m_worker.GetZoneExtra( *ev );
+                const auto& extra = zoneCtx->GetZoneExtra( *ev );
                 if( extra.name.Active() )
                 {
                     ImGui::TextUnformatted( m_worker.GetString( extra.name ) );
@@ -434,7 +434,9 @@ void View::DrawFindZone()
 
         ImGui::Separator();
 
-        auto& zoneData = m_worker.GetZonesForSourceLocation( m_findZone.match[m_findZone.selMatch] ).first;
+        auto p = m_worker.GetZonesForSourceLocation( m_findZone.match[m_findZone.selMatch] );
+        auto& zoneData = p.first;
+        auto zoneCtx = p.second;
         auto& zones = zoneData.zones;
         zones.ensure_sorted();
         if( ImGui::TreeNodeEx( "Histogram", ImGuiTreeNodeFlags_DefaultOpen ) )
@@ -590,7 +592,7 @@ void View::DrawFindZone()
                                 auto& ev = zones[i];
                                 if( ev.Zone()->End() > rangeMax || ev.Zone()->Start() < rangeMin ) continue;
                                 if( m_filteredZones.contains( &ev ) ) continue;
-                                if( selGroup == GetSelectionTarget( ev, groupBy ) )
+                                if( selGroup == GetSelectionTarget( ev, groupBy, zoneCtx ) )
                                 {
                                     const auto ctx = m_worker.GetContextSwitchData( m_worker.DecompressThread( zones[i].Thread() ) );
                                     int64_t t;
@@ -608,7 +610,7 @@ void View::DrawFindZone()
                             {
                                 auto& ev = zones[i];
                                 if( m_filteredZones.contains( &ev ) ) continue;
-                                if( selGroup == GetSelectionTarget( ev, groupBy ) )
+                                if( selGroup == GetSelectionTarget( ev, groupBy, zoneCtx ) )
                                 {
                                     const auto ctx = m_worker.GetContextSwitchData( m_worker.DecompressThread( zones[i].Thread() ) );
                                     int64_t t;
@@ -630,7 +632,7 @@ void View::DrawFindZone()
                                 auto& ev = zones[i];
                                 if( ev.Zone()->End() > rangeMax || ev.Zone()->Start() < rangeMin ) continue;
                                 if( m_filteredZones.contains( &ev ) ) continue;
-                                if( selGroup == GetSelectionTarget( ev, groupBy ) )
+                                if( selGroup == GetSelectionTarget( ev, groupBy, zoneCtx ) )
                                 {
                                     const auto t = ev.Zone()->End() - ev.Zone()->Start() - GetZoneChildTimeFast( *ev.Zone() );
                                     vec.push_back_no_space_check( t );
@@ -645,7 +647,7 @@ void View::DrawFindZone()
                             {
                                 auto& ev = zones[i];
                                 if( m_filteredZones.contains( &ev ) ) continue;
-                                if( selGroup == GetSelectionTarget( ev, groupBy ) )
+                                if( selGroup == GetSelectionTarget( ev, groupBy, zoneCtx ) )
                                 {
                                     const auto t = ev.Zone()->End() - ev.Zone()->Start() - GetZoneChildTimeFast( *ev.Zone() );
                                     vec.push_back_no_space_check( t );
@@ -664,7 +666,7 @@ void View::DrawFindZone()
                                 auto& ev = zones[i];
                                 if( ev.Zone()->End() > rangeMax || ev.Zone()->Start() < rangeMin ) continue;
                                 if( m_filteredZones.contains( &ev ) ) continue;
-                                if( selGroup == GetSelectionTarget( ev, groupBy ) )
+                                if( selGroup == GetSelectionTarget( ev, groupBy, zoneCtx ) )
                                 {
                                     const auto t = ev.Zone()->End() - ev.Zone()->Start();
                                     vec.push_back_no_space_check( t );
@@ -679,7 +681,7 @@ void View::DrawFindZone()
                             {
                                 auto& ev = zones[i];
                                 if( m_filteredZones.contains( &ev ) ) continue;
-                                if( selGroup == GetSelectionTarget( ev, groupBy ) )
+                                if( selGroup == GetSelectionTarget( ev, groupBy, zoneCtx ) )
                                 {
                                     const auto t = ev.Zone()->End() - ev.Zone()->Start();
                                     vec.push_back_no_space_check( t );
@@ -1516,9 +1518,9 @@ void View::DrawFindZone()
             if( m_userTextFilter.IsActive() )
             {
                 bool keep = false;
-                if ( m_worker.HasZoneExtra( *ev.Zone() ) && m_worker.GetZoneExtra( *ev.Zone() ).text.Active() )
+                if ( ev.Zone()->HasZoneExtra() && zoneCtx->GetZoneExtra( *ev.Zone() ).text.Active() )
                 {
-                    auto text = m_worker.GetString( m_worker.GetZoneExtra( *ev.Zone() ).text );
+                    auto text = m_worker.GetString( zoneCtx->GetZoneExtra( *ev.Zone() ).text );
                     if( m_userTextFilter.PassFilter( text ) )
                     {
                         keep = true;
@@ -1567,13 +1569,13 @@ void View::DrawFindZone()
             case FindZone::GroupBy::UserText:
             {
                 const auto& zone = *ev.Zone();
-                if( !m_worker.HasZoneExtra( zone ) )
+                if( !zone.HasZoneExtra() )
                 {
                     gid = std::numeric_limits<uint64_t>::max();
                 }
                 else
                 {
-                    const auto& extra = m_worker.GetZoneExtra( zone );
+                    const auto& extra = zoneCtx->GetZoneExtra( zone );
                     gid = extra.text.Active() ? extra.text.Idx() : std::numeric_limits<uint64_t>::max();
                 }
                 break;
@@ -1581,23 +1583,23 @@ void View::DrawFindZone()
             case FindZone::GroupBy::ZoneName:
             {
                 const auto& zone = *ev.Zone();
-                if( !m_worker.HasZoneExtra( zone ) )
+                if( !zone.HasZoneExtra() )
                 {
                     gid = std::numeric_limits<uint64_t>::max();
                 }
                 else
                 {
-                    const auto& extra = m_worker.GetZoneExtra( zone );
+                    const auto& extra = zoneCtx->GetZoneExtra( zone );
                     gid = extra.name.Active() ? extra.name.Idx() : std::numeric_limits<uint64_t>::max();
                 }
                 break;
             }
             case FindZone::GroupBy::Callstack:
-                gid = m_worker.GetZoneExtra( *ev.Zone() ).callstack.Val();
+                gid = zoneCtx->GetZoneExtra( *ev.Zone() ).callstack.Val();
                 break;
             case FindZone::GroupBy::Parent:
             {
-                const auto parent = GetZoneParent( *ev.Zone(), m_worker.DecompressThread( ev.Thread() ) );
+                const auto parent = GetZoneParent( { ev.Zone(), zoneCtx }, m_worker.DecompressThread( ev.Thread() ) );
                 if( parent ) gid = uint64_t( uint16_t( parent->SrcLoc() ) );
                 break;
             }
@@ -1784,7 +1786,7 @@ void View::DrawFindZone()
                 ImGui::Spacing();
                 if( ImGui::TreeNodeEx( "Zone list" ) )
                 {
-                    DrawZoneList( group->second.id, group->second.zones );
+                    DrawZoneList( group->second.id, group->second.zones, zoneCtx );
                 }
             }
         }
@@ -1876,7 +1878,7 @@ void View::DrawFindZone()
                 ImGui::TextColored( ImVec4( 0.5f, 0.5f, 0.5f, 1.0f ), "(%s) %s", RealToString( v->second.zones.size() ), TimeToString( v->second.time ) );
                 if( expand )
                 {
-                    DrawZoneList( v->second.id, v->second.zones );
+                    DrawZoneList( v->second.id, v->second.zones, zoneCtx );
                 }
             }
         }

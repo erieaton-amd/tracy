@@ -13,13 +13,9 @@ namespace tracy
 
 extern double s_time;
 
-template<typename T>
-static inline uint32_t GetZoneCallstack( const T& ev, const Worker& worker );
-
-template<>
-inline uint32_t GetZoneCallstack<ZoneEvent>( const ZoneEvent& ev, const Worker& worker )
+inline uint32_t GetZoneCallstack( const ZoneEventC& ev )
 {
-    return worker.GetZoneExtra( ev ).callstack.Val();
+    return ev.ctx->GetZoneExtra( *ev.event ).callstack.Val();
 }
 
 void View::CalcZoneTimeData( unordered_flat_map<int16_t, ZoneTimeData>& data, int64_t& ztime, const ZoneEvent& zone )
@@ -120,8 +116,7 @@ void View::CalcZoneTimeDataImpl( const V& children, const ContextSwitch* ctx, un
     }
 }
 
-template<typename T>
-void DrawZoneTrace( T zone, const std::vector<T>& trace, const Worker& worker, BuzzAnim<const void*>& anim, View& view, bool& showUnknownFrames, std::function<void(T, int&)> showZone )
+void DrawZoneTrace( const ZoneEventCT zone, const std::vector<ZoneEvent*>& trace, const Worker& worker, BuzzAnim<const void*>& anim, View& view, bool& showUnknownFrames, std::function<void(const ZoneEventCT, int&)> showZone )
 {
     bool expand = ImGui::TreeNode( "Zone trace" );
     ImGui::SameLine();
@@ -140,13 +135,13 @@ void DrawZoneTrace( T zone, const std::vector<T>& trace, const Worker& worker, B
 
     if( !trace.empty() )
     {
-        T prev = zone;
+        ZoneEventCT prev = zone;
         const auto sz = trace.size();
         for( size_t i=0; i<sz; i++ )
         {
-            auto curr = trace[i];
-            const auto pcv = GetZoneCallstack( *prev, worker );
-            const auto ccv = GetZoneCallstack( *curr, worker );
+            ZoneEventCT curr = { trace[i], prev.ctx, prev.thread };
+            const auto pcv = GetZoneCallstack( prev );
+            const auto ccv = GetZoneCallstack( curr );
             if( pcv == 0 || ccv == 0 )
             {
                 if( showUnknownFrames )
@@ -218,8 +213,8 @@ void DrawZoneTrace( T zone, const std::vector<T>& trace, const Worker& worker, B
         }
     }
 
-    auto last = trace.empty() ? zone : trace.back();
-    const auto lcv = GetZoneCallstack( *last, worker );
+    ZoneEventCT last = { trace.empty() ? zone.event : trace.back(), zone.ctx, zone.thread };
+    const auto lcv = GetZoneCallstack( last );
     if( lcv == 0 )
     {
         if( showUnknownFrames )
@@ -273,7 +268,7 @@ void DrawZoneTrace( T zone, const std::vector<T>& trace, const Worker& worker, B
 
 void View::DrawInfoWindow()
 {
-    if( m_zoneInfoWindow )
+    if( m_zoneInfoWindow.event )
     {
         DrawZoneInfoWindow();
     }
@@ -281,9 +276,7 @@ void View::DrawInfoWindow()
 
 void View::DrawZoneInfoWindow()
 {
-    auto& ev = *m_zoneInfoWindow;
-
-    const auto& srcloc = m_worker.GetSourceLocation( ev.SrcLoc() );
+    const auto& srcloc = m_worker.GetSourceLocation( m_zoneInfoWindow->SrcLoc() );
 
     const auto scale = GetScale();
     ImGui::SetNextWindowSize( ImVec2( 500 * scale, 600 * scale ), ImGuiCond_FirstUseEver );
@@ -291,11 +284,11 @@ void View::DrawZoneInfoWindow()
     ImGui::Begin( "Zone info", &show, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse );
     if( !ImGui::GetCurrentWindowRead()->SkipItems )
     {
-        auto thread = GetZoneThreadData( ev );
-        assert( thread );
+        auto ev = GetZoneThreadData( m_zoneInfoWindow );
+        assert( ev );
         if( ImGui::Button( ICON_FA_MICROSCOPE " Zoom to zone" ) )
         {
-            ZoomToZone( ev );
+            ZoomToZone( *ev.event );
         }
         auto parent = GetZoneParent( ev );
         if( parent )
@@ -303,14 +296,14 @@ void View::DrawZoneInfoWindow()
             ImGui::SameLine();
             if( ImGui::Button( ICON_FA_ARROW_UP " Go to parent" ) )
             {
-                ShowZoneInfo( *parent );
+                ShowZoneInfo( parent );
             }
         }
 #ifndef TRACY_NO_STATISTICS
-        if( thread->ctx->AreSourceLocationZonesReady() )
+        if( ev.ctx->AreSourceLocationZonesReady() )
         {
-            const auto sl = ev.SrcLoc();
-            const auto& slz = thread->ctx->GetZonesForSourceLocation( sl );
+            const auto sl = ev->SrcLoc();
+            const auto& slz = ev.ctx->GetZonesForSourceLocation( sl );
             if( !slz.zones.empty() )
             {
                 ImGui::SameLine();
@@ -321,9 +314,9 @@ void View::DrawZoneInfoWindow()
             }
         }
 #endif
-        if( m_worker.HasZoneExtra( ev ) && m_worker.GetZoneExtra( ev ).callstack.Val() != 0 )
+        if( ev->HasZoneExtra() && ev.Extra().callstack.Val() != 0 )
         {
-            const auto& extra = m_worker.GetZoneExtra( ev );
+            const auto& extra = ev.Extra();
             ImGui::SameLine();
             bool hilite = m_callstackInfoWindow == extra.callstack.Val();
             if( hilite )
@@ -368,11 +361,11 @@ void View::DrawZoneInfoWindow()
 
         ImGui::Separator();
 
-        const auto tid = thread->id;
-        if( m_worker.HasZoneExtra( ev ) && m_worker.GetZoneExtra( ev ).name.Active() )
+        const auto tid = ev.thread->id;
+        if( ev->HasZoneExtra() && ev.Extra().name.Active() )
         {
             ImGui::PushFont( g_fonts.normal, FontBig );
-            TextFocused( "Zone name:", m_worker.GetString( m_worker.GetZoneExtra( ev ).name ) );
+            TextFocused( "Zone name:", m_worker.GetString( ev.Extra().name ) );
             ImGui::PopFont();
             if( srcloc.name.active )
             {
@@ -385,12 +378,12 @@ void View::DrawZoneInfoWindow()
                 if( srcloc.name.active )
                 {
                     char tmp[1024];
-                    sprintf( tmp, "%s (%s)", m_worker.GetString( m_worker.GetZoneExtra( ev ).name ), m_worker.GetString( srcloc.name ) );
+                    sprintf( tmp, "%s (%s)", m_worker.GetString( ev.Extra().name ), m_worker.GetString( srcloc.name ) );
                     ImGui::SetClipboardText( tmp );
                 }
                 else
                 {
-                    ImGui::SetClipboardText( m_worker.GetString( m_worker.GetZoneExtra( ev ).name ) );
+                    ImGui::SetClipboardText( m_worker.GetString( ev.Extra().name ) );
                 }
             }
             TextFocused( "Function:", m_worker.GetString( srcloc.function ) );
@@ -410,7 +403,7 @@ void View::DrawZoneInfoWindow()
             TextFocusedClipboard( "Function:", m_worker.GetString( srcloc.function ), m_worker.GetString( srcloc.function ), 1, g_fonts.normal, FontNormal );
             ImGui::PopFont();
         }
-        SmallColorBox( GetSrcLocColor( m_worker.GetSourceLocation( ev.SrcLoc() ), 0 ) );
+        SmallColorBox( GetSrcLocColor( m_worker.GetSourceLocation( ev->SrcLoc() ), 0 ) );
         ImGui::SameLine();
         TextFocusedClipboard( "Location:", LocationToString( fileName, srcloc.line ), LocationToString( m_worker.GetString( srcloc.file ), srcloc.line ), 3 );
         if( ImGui::IsItemHovered() )
@@ -431,32 +424,32 @@ void View::DrawZoneInfoWindow()
             ImGui::SameLine();
             TextColoredUnformatted( ImVec4( 0.2f, 0.6f, 0.2f, 1.f ), "Fiber" );
         }
-        if( m_worker.HasZoneExtra( ev ) && m_worker.GetZoneExtra( ev ).text.Active() )
+        if( ev->HasZoneExtra() && ev.Extra().text.Active() )
         {
             TextDisabledUnformatted( "User text:" );
             ImGui::SameLine();
             if( ClipboardButton( 4 ) )
             {
-                ImGui::SetClipboardText( m_worker.GetString( m_worker.GetZoneExtra( ev ).text ) );
+                ImGui::SetClipboardText( m_worker.GetString( ev.Extra().text ) );
             }
             ImGui::SameLine();
-            ImGui::TextUnformatted( m_worker.GetString( m_worker.GetZoneExtra( ev ).text ) );
+            ImGui::TextUnformatted( m_worker.GetString( ev.Extra().text ) );
         }
 
         ImGui::Separator();
         ImGui::BeginChild( "##zoneinfo" );
 
-        const auto end = m_worker.GetZoneEnd( ev );
-        const auto ztime = end - ev.Start();
-        const auto selftime = GetZoneSelfTime( ev );
-        TextFocused( "Time from start of program:", TimeToStringExact( ev.Start() ) );
-        const std::time_t ts = m_worker.GetCaptureTime() + ev.Start() / 1000000000;
+        const auto end = m_worker.GetZoneEnd( *ev.event );
+        const auto ztime = end - ev->Start();
+        const auto selftime = GetZoneSelfTime( *ev.event );
+        TextFocused( "Time from start of program:", TimeToStringExact( ev->Start() ) );
+        const std::time_t ts = m_worker.GetCaptureTime() + ev->Start() / 1000000000;
         TextFocused( "Wall clock time:", std::asctime( std::localtime( &ts) ) );
         TextFocused( "Execution time:", TimeToString( ztime ) );
 #ifndef TRACY_NO_STATISTICS
-        if( thread->ctx->AreSourceLocationZonesReady() )
+        if( ev.ctx->AreSourceLocationZonesReady() )
         {
-            auto& zoneData = thread->ctx->GetZonesForSourceLocation( ev.SrcLoc() );
+            auto& zoneData = ev.ctx->GetZonesForSourceLocation( ev->SrcLoc() );
             if( zoneData.total > 0 )
             {
                 ImGui::SameLine();
@@ -473,39 +466,32 @@ void View::DrawZoneInfoWindow()
             TextDisabledUnformatted( buf );
         }
 
-        if( thread->ctx->type != ZoneContextType::CPU )
+        if( ev.ctx->type != ZoneContextType::CPU )
         {
-            assert( m_worker.HasZoneExtra( ev ));
-            auto& extra = m_worker.GetZoneExtra( ev );
+            assert( ev->HasZoneExtra() );
+            auto& extra = ev.Extra();
             TextFocused( "CPU command setup time:", TimeToString( extra.otherEnd.Val() - extra.otherStart.Val() ) );
-            if( !thread->ctx )
+            int64_t begin;
+            if( ev.thread->timeline.is_magic() )
             {
-                TextFocused( "Delay to execution:", TimeToString( ev.Start() - extra.otherStart.Val() ) );
+                begin = ( (Vector<ZoneEvent>*)&ev.thread->timeline )->front().Start();
             }
             else
             {
-                int64_t begin;
-                if( thread->timeline.is_magic() )
-                {
-                    begin = ( (Vector<ZoneEvent>*)&thread->timeline )->front().Start();
-                }
-                else
-                {
-                    begin = thread->timeline.front()->Start();
-                }
-                const auto drift = GpuDrift( thread->ctx );
-                TextFocused( "Delay to execution:", TimeToString( AdjustGpuTime( ev.Start(), begin, drift ) - extra.otherStart.Val() ) );
+                begin = ev.thread->timeline.front()->Start();
             }
+            const auto drift = GpuDrift( ev.ctx );
+            TextFocused( "Delay to execution:", TimeToString( AdjustGpuTime( ev->Start(), begin, drift ) - extra.otherStart.Val() ) );
         }
 
-        if( m_worker.HasZoneExtra( ev ) && thread->ctx->notes.contains( m_worker.GetZoneExtra( ev ).query_id ) )
+        if( ev->HasZoneExtra() && ev.ctx->notes.contains( ev.Extra().query_id ) )
         {
-            auto& extra = m_worker.GetZoneExtra( ev );
-            for( auto& p : thread->ctx->notes.at( extra.query_id ) )
+            auto& extra = ev.Extra();
+            for( auto& p : ev.ctx->notes.at( extra.query_id ) )
             {
-                if( thread->ctx->noteNames.count( p.first ) )
+                if( ev.ctx->noteNames.count( p.first ) )
                 {
-                    TextFocused( m_worker.GetString( thread->ctx->noteNames.at( p.first ) ), RealToString( p.second ) );
+                    TextFocused( m_worker.GetString( ev.ctx->noteNames.at( p.first ) ), RealToString( p.second ) );
                 }
                 else
                 {
@@ -517,10 +503,10 @@ void View::DrawZoneInfoWindow()
         const auto ctx = m_worker.GetContextSwitchData( tid );
         if( ctx )
         {
-            auto it = std::lower_bound( ctx->v.begin(), ctx->v.end(), ev.Start(), [] ( const auto& l, const auto& r ) { return (uint64_t)l.End() < (uint64_t)r; } );
+            auto it = std::lower_bound( ctx->v.begin(), ctx->v.end(), ev->Start(), [] ( const auto& l, const auto& r ) { return (uint64_t)l.End() < (uint64_t)r; } );
             if( it != ctx->v.end() )
             {
-                const auto end = m_worker.GetZoneEnd( ev );
+                const auto end = m_worker.GetZoneEnd( *ev.event );
                 auto eit = std::upper_bound( it, ctx->v.end(), end, [] ( const auto& l, const auto& r ) { return l < r.Start(); } );
                 bool incomplete = eit == ctx->v.end() && !m_worker.IsThreadFiber( tid );
                 uint64_t cnt = std::distance( it, eit );
@@ -533,14 +519,14 @@ void View::DrawZoneInfoWindow()
                         TextDisabledUnformatted( "(100%)" );
                         ImGui::Separator();
                         TextFocused( "Running state regions:", "1" );
-                        if( !thread->isFiber ) TextFocused( "CPU:", RealToString( it->Cpu() ) );
+                        if( !ev.thread->isFiber ) TextFocused( "CPU:", RealToString( it->Cpu() ) );
                     }
                 }
                 else if( cnt > 1 )
                 {
                     uint8_t cpus[256] = {};
                     auto bit = it;
-                    int64_t running = it->End() - ev.Start();
+                    int64_t running = it->End() - ev->Start();
                     cpus[it->Cpu()] = 1;
                     ++it;
                     for( uint64_t i=0; i<cnt-2; i++ )
@@ -566,7 +552,7 @@ void View::DrawZoneInfoWindow()
                     }
                     TextFocused( "Running state regions:", RealToString( cnt ) );
 
-                    if( !thread->isFiber )
+                    if( !ev.thread->isFiber )
                     {
                         int numCpus = 0;
                         for( int i=0; i<256; i++ ) numCpus += cpus[i];
@@ -629,17 +615,17 @@ void View::DrawZoneInfoWindow()
                         ImGui::Spacing();
                         ImGui::SameLine();
                         SmallCheckbox( "Time relative to zone start", &m_ctxSwitchTimeRelativeToZone );
-                        const int64_t adjust = m_ctxSwitchTimeRelativeToZone ? ev.Start() : 0;
+                        const int64_t adjust = m_ctxSwitchTimeRelativeToZone ? ev->Start() : 0;
                         const auto wrsz = eit - bit;
 
-                        const auto numColumns = thread->isFiber ? 4 : 6;
+                        const auto numColumns = ev.thread->isFiber ? 4 : 6;
                         if( ImGui::BeginTable( "##waitregions", numColumns, ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollY | ImGuiTableFlags_Reorderable | ImGuiTableFlags_Hideable, ImVec2( 0, ImGui::GetTextLineHeightWithSpacing() * std::min<int64_t>( 1+wrsz, 15 ) ) ) )
                         {
                             ImGui::TableSetupScrollFreeze( 0, 1 );
                             ImGui::TableSetupColumn( "Begin" );
                             ImGui::TableSetupColumn( "End" );
                             ImGui::TableSetupColumn( "Time" );
-                            if( thread->isFiber )
+                            if( ev.thread->isFiber )
                             {
                                 ImGui::TableSetupColumn( "Thread" );
                             }
@@ -682,7 +668,7 @@ void View::DrawZoneInfoWindow()
                                         ZoomToRange( cend, cwakeup );
                                     }
                                     ImGui::TableNextColumn();
-                                    if( thread->isFiber )
+                                    if( ev.thread->isFiber )
                                     {
                                         const auto ftid = m_worker.DecompressThread( bit[i].Thread() );
                                         ImGui::TextUnformatted( m_worker.GetThreadName( ftid ) );
@@ -837,10 +823,10 @@ void View::DrawZoneInfoWindow()
             {
                 const auto thread = m_worker.CompressThread( tid );
 
-                auto ait = std::lower_bound( mem.data.begin(), mem.data.end(), ev.Start(), [] ( const auto& l, const auto& r ) { return l.TimeAlloc() < r; } );
+                auto ait = std::lower_bound( mem.data.begin(), mem.data.end(), ev->Start(), [] ( const auto& l, const auto& r ) { return l.TimeAlloc() < r; } );
                 const auto aend = std::upper_bound( ait, mem.data.end(), end, [] ( const auto& l, const auto& r ) { return l < r.TimeAlloc(); } );
 
-                auto fit = std::lower_bound( mem.frees.begin(), mem.frees.end(), ev.Start(), [&mem] ( const auto& l, const auto& r ) { return mem.data[l].TimeFree() < r; } );
+                auto fit = std::lower_bound( mem.frees.begin(), mem.frees.end(), ev->Start(), [&mem] ( const auto& l, const auto& r ) { return mem.data[l].TimeFree() < r; } );
                 const auto fend = std::upper_bound( fit, mem.frees.end(), end, [&mem] ( const auto& l, const auto& r ) { return l < mem.data[r].TimeFree(); } );
 
                 const auto aDist = std::distance( ait, aend );
@@ -932,7 +918,7 @@ void View::DrawZoneInfoWindow()
 
                             ListMemData( v, []( auto v ) {
                                 ImGui::Text( "0x%" PRIx64, v->Ptr() );
-                                }, m_allocTimeRelativeToZone ? ev.Start() : -1, m_zoneInfoMemPool );
+                                }, m_allocTimeRelativeToZone ? ev->Start() : -1, m_zoneInfoMemPool );
                             ImGui::TreePop();
                         }
                     }
@@ -942,14 +928,14 @@ void View::DrawZoneInfoWindow()
 
         ImGui::Separator();
         {
-            if( thread->messages.empty() )
+            if( ev.thread->messages.empty() )
             {
                 TextDisabledUnformatted( "No messages" );
             }
             else
             {
-                auto msgit = std::lower_bound( thread->messages.begin(), thread->messages.end(), ev.Start(), [] ( const auto& lhs, const auto& rhs ) { return lhs->time < rhs; } );
-                auto msgend = std::lower_bound( msgit, thread->messages.end(), end+1, [] ( const auto& lhs, const auto& rhs ) { return lhs->time < rhs; } );
+                auto msgit = std::lower_bound( ev.thread->messages.begin(), ev.thread->messages.end(), ev->Start(), [] ( const auto& lhs, const auto& rhs ) { return lhs->time < rhs; } );
+                auto msgend = std::lower_bound( msgit, ev.thread->messages.end(), end+1, [] ( const auto& lhs, const auto& rhs ) { return lhs->time < rhs; } );
 
                 const auto dist = std::distance( msgit, msgend );
                 if( dist == 0 )
@@ -977,7 +963,7 @@ void View::DrawZoneInfoWindow()
                             viewSize = 0;
                             for( auto it = msgit; it < msgend; ++it )
                             {
-                                if( !GetZoneChild( ev, (*it)->time ) )
+                                if( !GetZoneChild( *ev.event, (*it)->time ) )
                                 {
                                     viewSize++;
                                     if( viewSize == 15 ) break;
@@ -993,11 +979,11 @@ void View::DrawZoneInfoWindow()
                             ImGui::TableHeadersRow();
                             do
                             {
-                                if( m_messagesExcludeChildren && GetZoneChild( ev, (*msgit)->time ) ) continue;
+                                if( m_messagesExcludeChildren && GetZoneChild( *ev.event, (*msgit)->time ) ) continue;
                                 ImGui::PushID( *msgit );
                                 ImGui::TableNextRow();
                                 ImGui::TableNextColumn();
-                                if( ImGui::Selectable( m_messageTimeRelativeToZone ? TimeToString( (*msgit)->time - ev.Start() ) : TimeToStringExact( (*msgit)->time ), m_msgHighlight == *msgit, ImGuiSelectableFlags_SpanAllColumns ) )
+                                if( ImGui::Selectable( m_messageTimeRelativeToZone ? TimeToString( (*msgit)->time - ev->Start() ) : TimeToStringExact( (*msgit)->time ), m_msgHighlight == *msgit, ImGuiSelectableFlags_SpanAllColumns ) )
                                 {
                                     CenterAtTime( (*msgit)->time );
                                 }
@@ -1038,22 +1024,22 @@ void View::DrawZoneInfoWindow()
         std::vector<const ZoneEvent*> zoneTrace;
         while( parent )
         {
-            zoneTrace.emplace_back( parent );
-            parent = GetZoneParent( *parent );
+            zoneTrace.emplace_back( parent.event );
+            parent = GetZoneParent( parent );
         }
         int idx = 0;
-        DrawZoneTrace<const ZoneEvent*>( &ev, zoneTrace, m_worker, m_zoneinfoBuzzAnim, *this, m_showUnknownFrames, [&idx, this, thread] ( const ZoneEvent* v, int& fidx ) {
+        DrawZoneTrace( ev, zoneTrace, m_worker, m_zoneinfoBuzzAnim, *this, m_showUnknownFrames, [&idx, this] ( const ZoneEventCT v, int& fidx ) {
             ImGui::TextDisabled( "%i.", fidx++ );
             ImGui::SameLine();
             const auto& srcloc = m_worker.GetSourceLocation( v->SrcLoc() );
             SmallColorBox( GetSrcLocColor( srcloc, 0 ) );
             ImGui::SameLine();
-            const auto txt = m_worker.GetZoneName( *v, srcloc );
+            const auto txt = m_worker.GetZoneName( v, srcloc );
             ImGui::PushID( idx++ );
             auto sel = ImGui::Selectable( txt, false );
             auto hover = ImGui::IsItemHovered();
             const auto fileName = m_worker.GetString( srcloc.file );
-            if( m_zoneinfoBuzzAnim.Match( v ) )
+            if( m_zoneinfoBuzzAnim.Match( v.event ) )
             {
                 const auto time = m_zoneinfoBuzzAnim.Time();
                 const auto indentVal = sin( time * 60.f ) * 10.f * time;
@@ -1063,7 +1049,7 @@ void View::DrawZoneInfoWindow()
             {
                 ImGui::SameLine();
             }
-            ImGui::TextDisabled( "(%s) %s", TimeToString( m_worker.GetZoneEnd( *v ) - v->Start() ), LocationToString( fileName, srcloc.line ) );
+            ImGui::TextDisabled( "(%s) %s", TimeToString( m_worker.GetZoneEnd( *v.event ) - v->Start() ), LocationToString( fileName, srcloc.line ) );
             ImGui::PopID();
             if( ImGui::IsItemClicked( 1 ) )
             {
@@ -1073,27 +1059,27 @@ void View::DrawZoneInfoWindow()
                 }
                 else
                 {
-                    m_zoneinfoBuzzAnim.Enable( v, 0.5f );
+                    m_zoneinfoBuzzAnim.Enable( v.event, 0.5f );
                 }
             }
             if( sel )
             {
-                ShowZoneInfo( *v );
+                ShowZoneInfo( v );
             }
             if( hover )
             {
-                m_zoneHighlight = v;
+                m_zoneHighlight = v.event;
                 if( IsMouseClicked( 2 ) )
                 {
-                    ZoomToZone( *v );
+                    ZoomToZone( *v.event );
                 }
-                ZoneTooltip( *v, *thread );
+                ZoneTooltip( v );
             }
             } );
 
-        if( ev.HasChildren() )
+        if( ev->HasChildren() )
         {
-            const auto& children = m_worker.GetZoneChildren( ev.Child() );
+            const auto& children = m_worker.GetZoneChildren( ev->Child() );
             bool expand = ImGui::TreeNode( "Child zones" );
             ImGui::SameLine();
             ImGui::TextDisabled( "(%s)", RealToString( children.size() ) );
@@ -1120,32 +1106,32 @@ void View::DrawZoneInfoWindow()
                     ImGui::SameLine();
                     if( SmallCheckbox( "Running time", &m_timeDist.runningTime ) ) m_timeDist.dataValidFor = nullptr;
                 }
-                if( m_timeDist.dataValidFor != &ev )
+                if( m_timeDist.dataValidFor != ev.event )
                 {
                     m_timeDist.data.clear();
-                    if( ev.IsEndValid() ) m_timeDist.dataValidFor = &ev;
+                    if( ev->IsEndValid() ) m_timeDist.dataValidFor = ev.event;
 
                     if( m_timeDist.runningTime )
                     {
                         assert( ctx );
                         int64_t time;
                         uint64_t cnt;
-                        if( !GetZoneRunningTime( ctx, ev, time, cnt ) )
+                        if( !GetZoneRunningTime( ctx, *ev.event, time, cnt ) )
                         {
                             TextDisabledUnformatted( "Incomplete context switch data." );
                             m_timeDist.dataValidFor = nullptr;
                         }
                         else
                         {
-                            auto it = m_timeDist.data.emplace( ev.SrcLoc(), ZoneTimeData{ time, 1 } ).first;
-                            CalcZoneTimeData( ctx, m_timeDist.data, it->second.time, ev );
+                            auto it = m_timeDist.data.emplace( ev->SrcLoc(), ZoneTimeData{ time, 1 } ).first;
+                            CalcZoneTimeData( ctx, m_timeDist.data, it->second.time, *ev.event );
                         }
                         m_timeDist.fztime = 100.f / time;
                     }
                     else
                     {
-                        auto it = m_timeDist.data.emplace( ev.SrcLoc(), ZoneTimeData{ ztime, 1 } ).first;
-                        CalcZoneTimeData( m_timeDist.data, it->second.time, ev );
+                        auto it = m_timeDist.data.emplace( ev->SrcLoc(), ZoneTimeData{ ztime, 1 } ).first;
+                        CalcZoneTimeData( m_timeDist.data, it->second.time, *ev.event );
                         m_timeDist.fztime = 100.f / ztime;
                     }
                 }
@@ -1207,7 +1193,7 @@ void View::DrawZoneInfoWindow()
                             const auto name = m_worker.GetZoneName( sl );
                             if( ImGui::Selectable( name, false, ImGuiSelectableFlags_SpanAllColumns ) )
                             {
-                                m_findZone.ShowZone( v->first, name, ev.Start(), m_worker.GetZoneEnd( ev ) );
+                                m_findZone.ShowZone( v->first, name, ev->Start(), m_worker.GetZoneEnd( *ev.event ) );
                             }
                             ImGui::SameLine();
                             ImGui::TextDisabled( "(\xc3\x97%s)", RealToString( v->second.count ) );
@@ -1233,7 +1219,7 @@ void View::DrawZoneInfoWindow()
 
     if( !show )
     {
-        m_zoneInfoWindow = nullptr;
+        m_zoneInfoWindow = {};
         m_zoneInfoStack.clear();
     }
 }
@@ -1469,17 +1455,19 @@ void View::DrawZoneInfoChildren( const V& children, int64_t ztime, const ThreadD
     }
 }
 
-void View::ShowZoneInfo( const ZoneEvent& ev )
+void View::ShowZoneInfo( const ZoneEventC& ev )
 {
-    if( m_zoneInfoWindow && m_zoneInfoWindow != &ev )
+    if( m_zoneInfoWindow.event && m_zoneInfoWindow.event != ev.event )
     {
         m_zoneInfoStack.push_back( m_zoneInfoWindow );
     }
-    m_zoneInfoWindow = &ev;
+    m_zoneInfoWindow = ev;
 }
 
-void View::ZoneTooltip( const ZoneEvent& ev, const ThreadData& thread )
+void View::ZoneTooltip( const ZoneEventCT zct )
 {
+    const auto& thread = *zct.thread;
+    const auto& ev = *zct.event;
     const auto tid = thread.id;
     auto& srcloc = m_worker.GetSourceLocation( ev.SrcLoc() );
     const auto end = m_worker.GetZoneEnd( ev );
@@ -1487,9 +1475,9 @@ void View::ZoneTooltip( const ZoneEvent& ev, const ThreadData& thread )
     const auto selftime = GetZoneSelfTime( ev );
 
     ImGui::BeginTooltip();
-    if( m_worker.HasZoneExtra( ev ) && m_worker.GetZoneExtra( ev ).name.Active() )
+    if( ev.HasZoneExtra() && zct.Extra().name.Active() )
     {
-        ImGui::TextUnformatted( m_worker.GetString( m_worker.GetZoneExtra( ev ).name ) );
+        ImGui::TextUnformatted( m_worker.GetString( zct.Extra().name ) );
     }
     if( srcloc.name.active )
     {
@@ -1513,9 +1501,9 @@ void View::ZoneTooltip( const ZoneEvent& ev, const ThreadData& thread )
     ImGui::Separator();
     TextFocused( "Execution time:", TimeToString( ztime ) );
 #ifndef TRACY_NO_STATISTICS
-    if( thread.ctx->AreSourceLocationZonesReady() )
+    if( zct.ctx->AreSourceLocationZonesReady() )
     {
-        auto& zoneData = thread.ctx->GetZonesForSourceLocation( ev.SrcLoc() );
+        auto& zoneData = zct.ctx->GetZonesForSourceLocation( ev.SrcLoc() );
         if( zoneData.total > 0 )
         {
             ImGui::SameLine();
@@ -1532,39 +1520,32 @@ void View::ZoneTooltip( const ZoneEvent& ev, const ThreadData& thread )
         TextDisabledUnformatted( buf );
     }
 
-    if( thread.ctx->type != ZoneContextType::CPU )
+    if( zct.ctx->type != ZoneContextType::CPU )
     {
-        assert( m_worker.HasZoneExtra( ev ) );
-        auto& extra = m_worker.GetZoneExtra( ev );
+        assert( ev.HasZoneExtra() );
+        auto& extra = zct.Extra();
         TextFocused( "CPU command setup time:", TimeToString( extra.otherEnd.Val() - extra.otherStart.Val() ) );
-        if( !thread.ctx )
+        int64_t begin;
+        if( thread.timeline.is_magic() )
         {
-            TextFocused( "Delay to execution:", TimeToString( ev.Start() - extra.otherStart.Val() ) );
+            begin = ( (Vector<ZoneEvent>*)&thread.timeline )->front().Start();
         }
         else
         {
-            int64_t begin;
-            if( thread.timeline.is_magic() )
-            {
-                begin = ( (Vector<ZoneEvent>*)&thread.timeline )->front().Start();
-            }
-            else
-            {
-                begin = thread.timeline.front()->Start();
-            }
-            const auto drift = GpuDrift( thread.ctx );
-            TextFocused( "Delay to execution:", TimeToString( AdjustGpuTime( ev.Start(), begin, drift ) - extra.otherStart.Val() ) );
+            begin = thread.timeline.front()->Start();
         }
+        const auto drift = GpuDrift( zct.ctx );
+        TextFocused( "Delay to execution:", TimeToString( AdjustGpuTime( ev.Start(), begin, drift ) - extra.otherStart.Val() ) );
     }
 
-    if( m_worker.HasZoneExtra( ev ) && thread.ctx->notes.contains( m_worker.GetZoneExtra( ev ).query_id ) )
+    if( ev.HasZoneExtra() && zct.ctx->notes.contains( zct.Extra().query_id ) )
     {
-        auto& extra = m_worker.GetZoneExtra( ev );
-        for( auto& p : thread.ctx->notes.at( extra.query_id ) )
+        auto& extra = zct.Extra();
+        for( auto& p : zct.ctx->notes.at( extra.query_id ) )
         {
-            if( thread.ctx->noteNames.count( p.first ) )
+            if( zct.ctx->noteNames.count( p.first ) )
             {
-                TextFocused( m_worker.GetString( thread.ctx->noteNames.at( p.first ) ), RealToString( p.second ) );
+                TextFocused( m_worker.GetString( zct.ctx->noteNames.at( p.first ) ), RealToString( p.second ) );
             }
             else
             {
@@ -1591,10 +1572,10 @@ void View::ZoneTooltip( const ZoneEvent& ev, const ThreadData& thread )
             TextFocused( "Running state regions:", RealToString( cnt ) );
         }
     }
-    if( m_worker.HasZoneExtra( ev ) && m_worker.GetZoneExtra( ev ).text.Active() )
+    if( ev.HasZoneExtra() && zct.Extra().text.Active() )
     {
         ImGui::NewLine();
-        TextColoredUnformatted( ImVec4( 0xCC / 255.f, 0xCC / 255.f, 0x22 / 255.f, 1.f ), m_worker.GetString( m_worker.GetZoneExtra( ev ).text ) );
+        TextColoredUnformatted( ImVec4( 0xCC / 255.f, 0xCC / 255.f, 0x22 / 255.f, 1.f ), m_worker.GetString( zct.Extra().text ) );
     }
     ImGui::EndTooltip();
 }
