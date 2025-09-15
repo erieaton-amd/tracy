@@ -170,7 +170,6 @@ struct GpuCtxData : public ZoneContext
 {
     int64_t timeDiff;
     uint64_t thread;
-  // uint64_t count;
     float period;
     bool hasPeriod;
     bool hasCalibration;
@@ -180,10 +179,6 @@ struct GpuCtxData : public ZoneContext
     int64_t lastGpuTime;
     uint64_t overflow;
     uint32_t overflowMul;
-  // StringIdx name;
-  // unordered_flat_map<uint64_t, GpuCtxThreadData> threadData;
-    //  unordered_flat_map<int64_t, StringIdx> noteNames;
-    //  unordered_flat_map<uint16_t, unordered_flat_map<int64_t, double>> notes;
     short_ptr<ZoneEvent> query[64 * 1024];
 };
 

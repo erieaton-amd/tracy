@@ -292,7 +292,7 @@ bool View::DrawCpuData( const TimelineContext& ctx, const std::vector<CpuUsageDr
                             TextFocused( "Thread:", m_worker.GetThreadName( thread ) );
                             ImGui::SameLine();
                             ImGui::TextDisabled( "(%s)", RealToString( thread ) );
-
+                            
                             m_drawThreadMigrations = thread;
                             m_cpuDataThread = thread;
                         }
@@ -323,7 +323,7 @@ bool View::DrawCpuData( const TimelineContext& ctx, const std::vector<CpuUsageDr
                         TextFocused( "Start time:", TimeToStringExact( ev.Start() ) );
                         TextFocused( "End time:", TimeToStringExact( end ) );
                         TextFocused( "Activity time:", TimeToString( end - ev.Start() ) );
-
+                        
                         // Display data about the switch in
                         auto threadCtxSwitches = m_worker.GetContextSwitchData( thread );
                         if( threadCtxSwitches )
@@ -337,7 +337,7 @@ bool View::DrawCpuData( const TimelineContext& ctx, const std::vector<CpuUsageDr
                             if( it != v.begin() )
                             {
                                 auto& prev = *( it - 1 );
-
+                                    
                                 ImGui::Separator();
 
                                 TextFocused( "Wait reason:", DecodeContextSwitchReasonCode( prev.Reason() ) );
@@ -349,7 +349,7 @@ bool View::DrawCpuData( const TimelineContext& ctx, const std::vector<CpuUsageDr
                                 TextFocused( "Wait state:", DecodeContextSwitchStateCode( prev.State() ) );
                                 TextFocused( "Waiting time:", TimeToString( it->WakeupVal() - prev.End() ) );
                             }
-
+                            
                             // Do we have information about the readying thread?
                             if( it->Start() - it->WakeupVal() )
                             {
@@ -369,7 +369,7 @@ bool View::DrawCpuData( const TimelineContext& ctx, const std::vector<CpuUsageDr
                                     bool wakeupThreadLocal, wakeupThreadUntracked;
                                     const char* wakeUpThreadProgram;
                                     auto wakeuplabel = GetThreadContextData( wakeupThread, wakeupThreadLocal, wakeupThreadUntracked, wakeUpThreadProgram );
-
+                                    
                                     uint32_t wakeupThreadColor = getDisplayThreadColor( wakeupThread, wakeupThreadLocal, wakeupThreadUntracked );
                                     TextColoredUnformatted( HighlightColor<75>( wakeupThreadColor ), wakeuplabel );
                                     ImGui::SameLine();
@@ -518,7 +518,7 @@ void View::DrawThreadMigrations( const TimelineContext& ctx, const int origOffse
 
                     DrawLine( draw, pw, startPos, wakecolor, wakeupLineSize );
                     draw->AddCircleFilled( pw, bgSize, wakecolor );
-
+                        
                     // Vertical line at beginning of thread to emphasize wakeup
                     if( wakeupWidthPixels >= 3 )
                     {
@@ -543,7 +543,7 @@ void View::DrawThreadMigrations( const TimelineContext& ctx, const int origOffse
 
             ++it;
 
-
+                
             const auto t1 = it->Start();
             const auto cpu1 = it->Cpu();
 

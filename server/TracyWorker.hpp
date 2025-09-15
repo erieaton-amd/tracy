@@ -879,11 +879,8 @@ private:
     int64_t ReadTimeline( FileRead& f, Vector<short_ptr<ZoneEvent>>& vec, ZoneContext* ctx, uint32_t size, int64_t refTime, int32_t& childIdx );
 
     tracy_force_inline void WriteTimeline( FileWrite& f, const Vector<short_ptr<ZoneEvent>>& vec, int64_t& refTime );
-  //tracy_force_inline void WriteTimeline( FileWrite& f, const Vector<short_ptr<GpuEvent>>& vec, int64_t& refTime, int64_t& refGpuTime );
     template<typename Adapter, typename V>
     void WriteTimelineImpl( FileWrite& f, const V& vec, int64_t& refTime );
-    template<typename Adapter, typename V>
-    void WriteTimelineImpl( FileWrite& f, const V& vec, int64_t& refTime, int64_t& refGpuTime );
 
     int64_t TscTime( int64_t tsc ) { return int64_t( ( tsc - m_data.baseTime ) * m_timerMul ); }
     int64_t TscTime( uint64_t tsc ) { return int64_t( ( tsc - m_data.baseTime ) * m_timerMul ); }
@@ -932,8 +929,6 @@ private:
     Vector<uint64_t> m_sourceLocationQueue;
     unordered_flat_map<uint64_t, int16_t> m_sourceLocationShrink;
     uint8_t m_defaultCtx { UINT8_MAX };
-  //Vector<ZoneContext *> m_contexts;
-    //unordered_flat_map<uint64_t, ThreadData*> m_threadMap;
     unordered_flat_map<uint32_t, FrameData*> m_vsyncFrameMap;
     FrameImagePending m_pendingFrameImageData = {};
     unordered_flat_map<uint64_t, SymbolPending> m_pendingSymbols;

@@ -282,8 +282,8 @@ private:
     void DrawFlameGraphHeader( uint64_t timespan );
     void DrawFlameGraphLevel( const std::vector<FlameGraphItem>& data, FlameGraphContext& ctx, int depth, bool samples );
     void DrawFlameGraphItem( const FlameGraphItem& item, FlameGraphContext& ctx, int depth, bool samples );
-    void BuildFlameGraph( std::vector<FlameGraphItem>& data, const Vector<short_ptr<ZoneEvent>>& zones );
-    void BuildFlameGraph( std::vector<FlameGraphItem>& data, const Vector<short_ptr<ZoneEvent>>& zones, const ContextSwitch* ctx );
+    void BuildFlameGraph( const Worker& worker, std::vector<FlameGraphItem>& data, const Vector<short_ptr<ZoneEvent>>& zones );
+    void BuildFlameGraph( const Worker& worker, std::vector<FlameGraphItem>& data, const Vector<short_ptr<ZoneEvent>>& zones, const ContextSwitch* ctx );
     void BuildFlameGraph( const Worker& worker, std::vector<FlameGraphItem>& data, const Vector<SampleData>& samples );
 
     void ListMemData( std::vector<const MemEvent*>& vec, const std::function<void(const MemEvent*)>& DrawAddress, int64_t startTime = -1, uint64_t pool = 0 );
@@ -322,9 +322,7 @@ private:
     uint32_t GetSrcLocColor( const SourceLocation& srcloc, int depth );
     uint32_t GetRawSrcLocColor( const SourceLocation& srcloc, int depth );
     uint32_t GetZoneColor( const ZoneEvent& ev, uint64_t thread, int depth );
-  //uint32_t GetZoneColor( const GpuEvent& ev );
     ZoneColorData GetZoneColorData( const ZoneEvent& ev, uint64_t thread, int depth, uint32_t inheritedColor );
-  //ZoneColorData GetZoneColorData( const GpuEvent& ev );
 
     void ZoomToZone( const ZoneEvent& ev );
     void ZoomToPrevFrame();
@@ -334,7 +332,6 @@ private:
     void ShowZoneInfo( const ZoneEvent& ev );
 
     void ZoneTooltip( const ZoneEvent& ev, const ThreadData& thread );
-  //void ZoneTooltip( const GpuEvent& ev );
     void CallstackTooltip( uint32_t idx );
     void CallstackTooltipContents( uint32_t idx );
     void CrashTooltip();
@@ -344,7 +341,6 @@ private:
     const ZoneEvent* GetZoneChild( const ZoneEvent& zone, int64_t time ) const;
     bool IsZoneReentry( const ZoneEvent& zone ) const;
     bool IsZoneReentry( const ZoneEvent& zone, uint64_t tid, const ZoneContext* ctx ) const;
-  //const GpuEvent* GetZoneParent( const GpuEvent& zone ) const;
     const ThreadData* GetZoneThreadData( const ZoneEvent& zone ) const;
     const ZoneContext* GetZoneCtx( const ZoneEvent& zone ) const;
     bool FindMatchingZone( int prev0, int prev1, int flags );
@@ -365,11 +361,9 @@ private:
     void DrawCallstackCalls( uint32_t callstack, uint16_t limit ) const;
     void SetViewToLastFrames();
     int64_t GetZoneChildTime( const ZoneEvent& zone );
-  //int64_t GetZoneChildTime( const GpuEvent& zone );
     int64_t GetZoneChildTimeFast( const ZoneEvent& zone );
     int64_t GetZoneChildTimeFastClamped( const ZoneEvent& zone, int64_t t0, int64_t t1 );
     int64_t GetZoneSelfTime( const ZoneEvent& zone );
-  //int64_t GetZoneSelfTime( const GpuEvent& zone );
     bool GetZoneRunningTime( const ContextSwitch* ctx, const ZoneEvent& ev, int64_t& time, uint64_t& cnt );
     bool GetZoneRunningTime( const ContextSwitch* ctx, const ZoneEvent& ev, const RangeSlim& range, int64_t& time, uint64_t& cnt );
     const char* GetThreadContextData( uint64_t thread, bool& local, bool& untracked, const char*& program );
@@ -470,9 +464,6 @@ private:
     DecayValue<const MessageData*> m_msgHighlight = nullptr;
     DecayValue<uint32_t> m_lockHoverHighlight = InvalidId;
     DecayValue<const MessageData*> m_msgToFocus = nullptr;
-  //const GpuEvent* m_gpuInfoWindow = nullptr;
-  //const GpuEvent* m_gpuHighlight;
-    uint64_t m_gpuInfoWindowThread;
     uint32_t m_callstackInfoWindow = 0;
     int64_t m_memoryAllocInfoWindow = -1;
     uint64_t m_memoryAllocInfoPool = 0;
@@ -570,7 +561,6 @@ private:
     BuzzAnim<uint32_t> m_statBuzzAnim;
 
     Vector<const ZoneEvent*> m_zoneInfoStack;
-  //Vector<const GpuEvent*> m_gpuInfoStack;
 
     SourceContents m_srcHintCache;
     std::unique_ptr<SourceView> m_sourceView;
@@ -872,8 +862,6 @@ private:
     struct {
         std::pair<const ZoneEvent*, int64_t> zoneSelfTime = { nullptr, 0 };
         std::pair<const ZoneEvent*, int64_t> zoneSelfTime2 = { nullptr, 0 };
-      //std::pair<const GpuEvent*, int64_t> gpuSelfTime = { nullptr, 0 };
-      //std::pair<const GpuEvent*, int64_t> gpuSelfTime2 = { nullptr, 0 };
     } m_cache;
 
     struct {

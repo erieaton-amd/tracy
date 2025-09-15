@@ -66,18 +66,7 @@ void TimelineItemGpu::HeaderTooltip( const char* label ) const
             auto tid = it->first;
             if( tid == 0 )
             {
-                if( !it->second->timeline.empty() )
-                {
-                    if( it->second->timeline.is_magic() )
-                    {
-                        auto& tl = *(Vector<ZoneEvent>*)&it->second->timeline;
-                        tid = m_view.GetZoneThread( *tl.begin() );
-                    }
-                    else
-                    {
-                        tid = m_view.GetZoneThread( *(*it->second->timeline.begin()) );
-                    }
-                }
+                tid = it->second->id;
             }
             SmallColorBox( GetThreadColor( tid, 0, dynamicColors ) );
             ImGui::SameLine();

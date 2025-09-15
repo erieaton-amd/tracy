@@ -31,10 +31,6 @@ ZoneContext::SourceLocationZones* ZoneContext::GetSourceLocationZonesReal( uint1
 {
     auto it = sourceLocationZones.find( srcloc );
     assert( it != sourceLocationZones.end() );
-    // if( it == sourceLocationZones.end() )
-    // {
-    //   it = sourceLocationZones.emplace( srcloc, SourceLocationZones() ).first;
-    // }
     srclocZonesLast.first = srcloc;
     srclocZonesLast.second = &it->second;
     return &it->second;
@@ -52,10 +48,6 @@ uint64_t* ZoneContext::GetSourceLocationZonesCntReal( uint16_t srcloc )
 {
     auto it = sourceLocationZonesCnt.find( srcloc );
     assert( it != sourceLocationZonesCnt.end() );
-    // if( it == sourceLocationZonesCnt.end() )
-    // {
-    //   it = sourceLocationZonesCnt.emplace( srcloc, 0 ).first;
-    // }
     srclocCntLast.first = srcloc;
     srclocCntLast.second = &it->second;
     return &it->second;

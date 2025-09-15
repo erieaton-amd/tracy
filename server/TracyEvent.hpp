@@ -584,11 +584,11 @@ struct ContextSwitchData
     Int48 _start;
     uint8_t _cpu;
     uint8_t _wakeupcpu;
-
+    
     Int48 _end;
     int8_t _reason;
     int8_t _state;
-
+    
     Int48 _wakeup;
     uint16_t _thread; // currently unused ? Could store next thread or prios here.
 };

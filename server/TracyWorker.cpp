@@ -1942,11 +1942,6 @@ Worker::~Worker()
     delete[] m_frameImageBuffer;
     delete[] m_tmpBuf;
 
-    // for( auto& v : GetDefaultCtx().threads )
-    // {
-    //     v->timeline.~Vector();
-    //     v->stack.~Vector();
-    // }
     for( auto& v : m_data.contexts )
     {
         for( auto& vt : v->threadData )
@@ -5744,7 +5739,6 @@ void Worker::ProcessGpuZoneBeginAllocSrcLocImpl( ZoneEvent* zone, const QueueGpu
 {
     assert( m_pendingSourceLocationPayload != 0 );
     zone->SetSrcLoc( m_pendingSourceLocationPayload );
-    //CheckSourceLocation(m_pendingSourceLocationPayload);
     ProcessGpuZoneBeginImplCommon( zone, ev, serial );
     m_pendingSourceLocationPayload = 0;
 }
@@ -5787,7 +5781,6 @@ void Worker::ProcessGpuZoneBeginImplCommon( ZoneEvent* zone, const QueueGpuZoneB
     if( ctx->thread == 0 )
     {
         // Vulkan, OpenCL and Direct3D 12 contexts are not bound to any single thread.
-      //zone->SetThread( CompressThread( ev.thread ) );
         ctx->threadCtx = ev.thread;
         ztid = ev.thread;
     }
@@ -5795,7 +5788,6 @@ void Worker::ProcessGpuZoneBeginImplCommon( ZoneEvent* zone, const QueueGpuZoneB
     {
         // OpenGL and Direct3D11 doesn't need per-zone thread id. It still can be sent,
         // because it may be needed for callstack collection purposes.
-      //zone->SetThread( 0 );
         ctx->threadCtx = 0;
         ztid = 0;
     }
@@ -8448,51 +8440,6 @@ void Worker::WriteTimelineImpl( FileWrite& f, const V& vec, int64_t& refTime )
             WriteTimeline( f, GetZoneChildren( v.Child() ), refTime );
         }
         WriteTimeOffset( f, refTime, v.End() );
-    }
-}
-/*
-void Worker::WriteTimeline( FileWrite& f, const Vector<short_ptr<GpuEvent>>& vec, int64_t& refTime, int64_t& refGpuTime )
-{
-    uint64_t sz = vec.size();
-    f.Write( &sz, sizeof( sz ) );
-    if( vec.is_magic() )
-    {
-        WriteTimelineImpl<VectorAdapterDirect<GpuEvent>>( f, *(Vector<GpuEvent>*)( &vec ), refTime, refGpuTime );
-    }
-    else
-    {
-        WriteTimelineImpl<VectorAdapterPointer<GpuEvent>>( f, vec, refTime, refGpuTime );
-    }
-}
-*/
-template<typename Adapter, typename V>
-void Worker::WriteTimelineImpl( FileWrite& f, const V& vec, int64_t& refTime, int64_t& refGpuTime )
-{
-    Adapter a;
-    for( auto& val : vec )
-    {
-        auto& v = a(val);
-        WriteTimeOffset( f, refTime, v.CpuStart() );
-        WriteTimeOffset( f, refGpuTime, v.GpuStart() );
-        const int16_t srcloc = v.SrcLoc();
-        f.Write( &srcloc, sizeof( srcloc ) );
-        f.Write( &v.callstack, sizeof( v.callstack ) );
-        const uint16_t thread = v.Thread();
-        f.Write( &thread, sizeof( thread ) );
-
-        if( v.Child() < 0 )
-        {
-            const uint64_t sz = 0;
-            f.Write( &sz, sizeof( sz ) );
-        }
-        else
-        {
-            WriteTimeline( f, GetGpuChildren( v.Child() ), refTime, refGpuTime );
-        }
-
-        WriteTimeOffset( f, refTime, v.CpuEnd() );
-        WriteTimeOffset( f, refGpuTime, v.GpuEnd() );
-        f.Write( &v.query_id, sizeof( v.query_id ) );
     }
 }
 

@@ -34,10 +34,10 @@ bool TimelineItemThread::IsEmpty() const
 {
     auto& crash = m_worker.GetCrashEvent();
     return crash.thread != m_thread->id &&
-        m_thread->timeline.empty() &&
-        m_thread->messages.empty() &&
-        (m_thread->ctx->type != ZoneContextType::CPU ||
-         static_cast<const CPUThreadData*>(m_thread)->ghostZones.empty());
+           m_thread->timeline.empty() &&
+           m_thread->messages.empty() &&
+           ( m_thread->ctx->type != ZoneContextType::CPU ||
+             static_cast<const CPUThreadData*>( m_thread )->ghostZones.empty() );
 }
 
 uint32_t TimelineItemThread::HeaderColor() const
@@ -550,7 +550,7 @@ void TimelineItemThread::PreprocessContextSwitches( const TimelineContext& ctx, 
         }
         else if ( m_thread->ctx->type == ZoneContextType::CPU )
         {
-            const Vector<SampleData>& sampleData = static_cast<const CPUThreadData*>(m_thread)->samples;
+            const Vector<SampleData>& sampleData = static_cast<const CPUThreadData*>( m_thread )->samples;
             uint32_t waitStack = 0;
             if( !sampleData.empty() )
             {
