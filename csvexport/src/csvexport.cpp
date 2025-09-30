@@ -216,10 +216,10 @@ int main(int argc, char** argv)
 
     auto worker = tracy::Worker(*f);
 
-    if (args.unwrapMessages) 
+    if (args.unwrapMessages)
     {
         const auto& msgs = worker.GetMessages();
-    
+
         if (msgs.size() > 0)
         {
             std::vector<const char*> columnsForMessages;
@@ -244,7 +244,7 @@ int main(int argc, char** argv)
         {
             printf("There are currently no messages!\n");
         }
-    
+
         return 0;
     }
 
@@ -299,7 +299,7 @@ int main(int argc, char** argv)
             const auto& zone_data = it->second;
             for (const auto& zone_thread_data : zone_data.zones)
             {
-                tracy::GpuEvent* gpu_event = zone_thread_data.Zone();
+                tracy::ZoneEvent* gpu_event = zone_thread_data.Zone();
                 const auto start = gpu_event->GpuStart();
                 const auto end = gpu_event->GpuEnd();
 

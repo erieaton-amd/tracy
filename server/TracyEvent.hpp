@@ -232,6 +232,9 @@ struct ZoneExtra
     StringIdx text;
     StringIdx name;
     Int24 color;
+    Int48 otherStart;
+    Int48 otherEnd;
+    uint16_t query_id;
 };
 
 enum { ZoneExtraSize = sizeof( ZoneExtra ) };
@@ -388,36 +391,6 @@ struct LockHighlight
     uint8_t thread;
     bool blocked;
 };
-
-
-struct GpuEvent
-{
-    tracy_force_inline int64_t CpuStart() const { return int64_t( _cpuStart_srcloc ) >> 16; }
-    tracy_force_inline void SetCpuStart( int64_t cpuStart ) { assert( cpuStart < (int64_t)( 1ull << 47 ) ); memcpy( ((char*)&_cpuStart_srcloc)+2, &cpuStart, 4 ); memcpy( ((char*)&_cpuStart_srcloc)+6, ((char*)&cpuStart)+4, 2 ); }
-    tracy_force_inline int64_t CpuEnd() const { return int64_t( _cpuEnd_thread ) >> 16; }
-    tracy_force_inline void SetCpuEnd( int64_t cpuEnd ) { assert( cpuEnd < (int64_t)( 1ull << 47 ) ); memcpy( ((char*)&_cpuEnd_thread)+2, &cpuEnd, 4 ); memcpy( ((char*)&_cpuEnd_thread)+6, ((char*)&cpuEnd)+4, 2 ); }
-    tracy_force_inline int64_t GpuStart() const { return int64_t( _gpuStart_child1 ) >> 16; }
-    tracy_force_inline void SetGpuStart( int64_t gpuStart ) { /*assert( gpuStart < (int64_t)( 1ull << 47 ) );*/ memcpy( ((char*)&_gpuStart_child1)+2, &gpuStart, 4 ); memcpy( ((char*)&_gpuStart_child1)+6, ((char*)&gpuStart)+4, 2 ); }
-    tracy_force_inline int64_t GpuEnd() const { return int64_t( _gpuEnd_child2 ) >> 16; }
-    tracy_force_inline void SetGpuEnd( int64_t gpuEnd ) { assert( gpuEnd < (int64_t)( 1ull << 47 ) ); memcpy( ((char*)&_gpuEnd_child2)+2, &gpuEnd, 4 ); memcpy( ((char*)&_gpuEnd_child2)+6, ((char*)&gpuEnd)+4, 2 ); }
-    tracy_force_inline int16_t SrcLoc() const { return int16_t( _cpuStart_srcloc & 0xFFFF ); }
-    tracy_force_inline void SetSrcLoc( int16_t srcloc ) { memcpy( &_cpuStart_srcloc, &srcloc, 2 ); }
-    tracy_force_inline uint16_t Thread() const { return uint16_t( _cpuEnd_thread & 0xFFFF ); }
-    tracy_force_inline void SetThread( uint16_t thread ) { memcpy( &_cpuEnd_thread, &thread, 2 ); }
-    tracy_force_inline int32_t Child() const { return int32_t( uint32_t( _gpuStart_child1 & 0xFFFF ) | ( uint32_t( _gpuEnd_child2 & 0xFFFF ) << 16 ) ); }
-    tracy_force_inline void SetChild( int32_t child ) { memcpy( &_gpuStart_child1, &child, 2 ); memcpy( &_gpuEnd_child2, ((char*)&child)+2, 2 ); }
-
-    uint64_t _cpuStart_srcloc;
-    uint64_t _cpuEnd_thread;
-    uint64_t _gpuStart_child1;
-    uint64_t _gpuEnd_child2;
-    Int24 callstack;
-    uint16_t query_id;
-};
-
-enum { GpuEventSize = sizeof( GpuEvent ) };
-static_assert( std::is_standard_layout<GpuEvent>::value, "GpuEvent is not standard layout" );
-
 
 struct MemEvent
 {
@@ -611,11 +584,11 @@ struct ContextSwitchData
     Int48 _start;
     uint8_t _cpu;
     uint8_t _wakeupcpu;
-    
+
     Int48 _end;
     int8_t _reason;
     int8_t _state;
-    
+
     Int48 _wakeup;
     uint16_t _thread; // currently unused ? Could store next thread or prios here.
 };
@@ -754,8 +727,8 @@ struct ThreadData
 
 struct GpuCtxThreadData
 {
-    Vector<short_ptr<GpuEvent>> timeline;
-    Vector<short_ptr<GpuEvent>> stack;
+    Vector<short_ptr<ZoneEvent>> timeline;
+    Vector<short_ptr<ZoneEvent>> stack;
 };
 
 struct GpuCtxData
@@ -777,7 +750,7 @@ struct GpuCtxData
     unordered_flat_map<uint64_t, GpuCtxThreadData> threadData;
     unordered_flat_map<int64_t, StringIdx> noteNames;
     unordered_flat_map<uint16_t, unordered_flat_map<int64_t, double>> notes;
-    short_ptr<GpuEvent> query[64*1024];
+    short_ptr<ZoneEvent> query[64*1024];
 };
 
 enum { GpuCtxDataSize = sizeof( GpuCtxData ) };

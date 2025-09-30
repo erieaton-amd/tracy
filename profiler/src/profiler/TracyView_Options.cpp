@@ -161,7 +161,7 @@ void View::DrawOptions()
                             size_t lastidx = 0;
                             if( timeline.is_magic() )
                             {
-                                auto& tl = *((Vector<GpuEvent>*)&timeline);
+                                auto& tl = *((Vector<ZoneEvent>*)&timeline);
                                 for( size_t j=tl.size()-1; j > 0; j-- )
                                 {
                                     if( tl[j].GpuEnd() >= 0 )
@@ -191,7 +191,7 @@ void View::DrawOptions()
                             size_t idx = 0;
                             if( timeline.is_magic() )
                             {
-                                auto& tl = *((Vector<GpuEvent>*)&timeline);
+                                auto& tl = *((Vector<ZoneEvent>*)&timeline);
                                 do
                                 {
                                     const auto p0 = dist( gen );
