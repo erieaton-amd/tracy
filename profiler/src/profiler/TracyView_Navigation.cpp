@@ -21,7 +21,8 @@ void View::ZoomToZoneGPU( const ZoneEvent& ev )
     }
     else
     {
-        const auto td = ctx->threadData.size() == 1 ? ctx->threadData.begin() : ctx->threadData.find( m_worker.DecompressThread( ev.Thread() ) );
+        auto& ex = m_worker.GetGpuExtra(ev);
+        const auto td = ctx->threadData.size() == 1 ? ctx->threadData.begin() : ctx->threadData.find( m_worker.DecompressThread( ex.thread ) );
         assert( td != ctx->threadData.end() );
         int64_t begin;
         if( td->second.timeline.is_magic() )
@@ -30,7 +31,7 @@ void View::ZoomToZoneGPU( const ZoneEvent& ev )
         }
         else
         {
-            begin = td->second.timeline.front()->GpuStart();
+            begin = td->second.timeline.front()->Start();
         }
         const auto drift = GpuDrift( ctx );
         ZoomToRange( AdjustGpuTime( ev.Start(), begin, drift ), AdjustGpuTime( end, begin, drift ) );

@@ -71,11 +71,11 @@ void TimelineItemGpu::HeaderTooltip( const char* label ) const
                     if( it->second.timeline.is_magic() )
                     {
                         auto& tl = *(Vector<ZoneEvent>*)&it->second.timeline;
-                        tid = m_worker.DecompressThread( tl.begin()->Thread() );
+                        tid = m_worker.DecompressThread( m_worker.GetGpuExtra( *tl.begin() ).thread );
                     }
                     else
                     {
-                        tid = m_worker.DecompressThread( (*it->second.timeline.begin())->Thread() );
+                        tid = m_worker.DecompressThread( m_worker.GetGpuExtra( **it->second.timeline.begin() ).thread );
                     }
                 }
             }

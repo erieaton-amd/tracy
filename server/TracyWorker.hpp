@@ -265,6 +265,7 @@ private:
         StringDiscovery<PlotData*> plots;
         Vector<ThreadData*> threads;
         Vector<ZoneExtra> zoneExtra;
+        Vector<GpuExtra> gpuExtra;
         MemData* memory;
         unordered_flat_map<uint64_t, MemData*> memNameMap;
         uint64_t zonesCnt = 0;
@@ -604,6 +605,7 @@ public:
 
     tracy_force_inline const bool HasZoneExtra( const ZoneEvent& ev ) const { return ev.extra != 0; }
     tracy_force_inline const ZoneExtra& GetZoneExtra( const ZoneEvent& ev ) const { return m_data.zoneExtra[ev.extra]; }
+    tracy_force_inline const GpuExtra& GetGpuExtra( const ZoneEvent& ev ) const { return m_data.gpuExtra[ev.extra]; }
 
     std::vector<int16_t> GetMatchingSourceLocation( const char* query, bool ignoreCase ) const;
 
@@ -786,6 +788,8 @@ private:
     tracy_force_inline ZoneEvent* AllocZoneEvent();
     tracy_force_inline void ProcessZoneBeginImpl( ZoneEvent* zone, const QueueZoneBegin& ev );
     tracy_force_inline void ProcessZoneBeginAllocSrcLocImpl( ZoneEvent* zone, const QueueZoneBeginLean& ev );
+    tracy_force_inline GpuExtra& AllocGpuExtra( ZoneEvent& ev );
+    tracy_force_inline pair<ZoneEvent*, GpuExtra&> AllocGpuEvent();
     tracy_force_inline void ProcessGpuZoneBeginImpl( ZoneEvent* zone, const QueueGpuZoneBegin& ev, bool serial );
     tracy_force_inline void ProcessGpuZoneBeginAllocSrcLocImpl( ZoneEvent* zone, const QueueGpuZoneBeginLean& ev, bool serial );
     tracy_force_inline void ProcessGpuZoneBeginImplCommon( ZoneEvent* zone, const QueueGpuZoneBeginLean& ev, bool serial );
@@ -951,6 +955,7 @@ private:
 #endif
 
     tracy_force_inline ZoneExtra& GetZoneExtraMutable( const ZoneEvent& ev ) { return m_data.zoneExtra[ev.extra]; }
+    tracy_force_inline GpuExtra& GetGpuExtraMutable( const ZoneEvent& ev ) { return m_data.gpuExtra[ev.extra]; }
     tracy_force_inline ZoneExtra& AllocZoneExtra( ZoneEvent& ev );
     tracy_force_inline ZoneExtra& RequestZoneExtra( ZoneEvent& ev );
 

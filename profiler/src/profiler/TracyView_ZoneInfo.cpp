@@ -1431,7 +1431,7 @@ void View::DrawGpuInfoWindow()
 {
     auto& ev = *m_gpuInfoWindow;
     const auto& srcloc = m_worker.GetSourceLocation( ev.SrcLoc() );
-    auto& ex = m_worker.GetZoneExtra(ev);
+    auto& ex = m_worker.GetGpuExtra(ev);
 
     const auto scale = GetScale();
     ImGui::SetNextWindowSize( ImVec2( 500 * scale, 600 * scale), ImGuiCond_FirstUseEver );
@@ -1539,7 +1539,7 @@ void View::DrawGpuInfoWindow()
         }
         else
         {
-            const auto td = ctx->threadData.size() == 1 ? ctx->threadData.begin() : ctx->threadData.find( m_worker.DecompressThread( ev.Thread() ) );
+            const auto td = ctx->threadData.size() == 1 ? ctx->threadData.begin() : ctx->threadData.find( m_worker.DecompressThread( ex.thread ) );
             assert( td != ctx->threadData.end() );
             int64_t begin;
             if( td->second.timeline.is_magic() )
@@ -1548,7 +1548,7 @@ void View::DrawGpuInfoWindow()
             }
             else
             {
-                begin = td->second.timeline.front()->GpuStart();
+                begin = td->second.timeline.front()->Start();
             }
             const auto drift = GpuDrift( ctx );
             TextFocused( "Delay to execution:", TimeToString( AdjustGpuTime( ev.Start(), begin, drift ) - ex.otherStart.Val() ) );
@@ -1980,7 +1980,7 @@ void View::ZoneTooltip( const ZoneEvent& ev )
 
 void View::ZoneTooltipGPU( const ZoneEvent& ev )
 {
-    const auto& ex = m_worker.GetZoneExtra(ev);
+    const auto& ex = m_worker.GetGpuExtra(ev);
     const auto tid = GetZoneThreadGPU( ev );
     const auto& srcloc = m_worker.GetSourceLocation( ev.SrcLoc() );
     const auto end = m_worker.GetZoneEnd( ev );
@@ -2022,7 +2022,7 @@ void View::ZoneTooltipGPU( const ZoneEvent& ev )
     }
     else
     {
-        const auto td = ctx->threadData.size() == 1 ? ctx->threadData.begin() : ctx->threadData.find( m_worker.DecompressThread( ev.Thread() ) );
+        const auto td = ctx->threadData.size() == 1 ? ctx->threadData.begin() : ctx->threadData.find( m_worker.DecompressThread( ex.thread ) );
         assert( td != ctx->threadData.end() );
         int64_t begin;
         if( td->second.timeline.is_magic() )
@@ -2031,7 +2031,7 @@ void View::ZoneTooltipGPU( const ZoneEvent& ev )
         }
         else
         {
-            begin = td->second.timeline.front()->GpuStart();
+            begin = td->second.timeline.front()->Start();
         }
         const auto drift = GpuDrift( ctx );
         TextFocused( "Delay to execution:", TimeToString( AdjustGpuTime( ev.Start(), begin, drift ) - ex.otherStart.Val() ) );

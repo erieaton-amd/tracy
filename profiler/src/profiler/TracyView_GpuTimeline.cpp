@@ -41,9 +41,9 @@ bool View::DrawGpu( const TimelineContext& ctx, const GpuCtxData& gpu, int& offs
         if( tl.is_magic() )
         {
             auto& tlm = *(Vector<ZoneEvent>*)&tl;
-            if( tlm.front().GpuStart() >= 0 )
+            if( tlm.front().Start() >= 0 )
             {
-                const auto begin = tlm.front().GpuStart();
+                const auto begin = tlm.front().Start();
                 const auto drift = GpuDrift( &gpu );
                 if( !singleThread ) offset += sstep;
                 const auto partDepth = DispatchGpuZoneLevel( tl, hover, pxns, int64_t( nspx ), wpos, offset, 0, gpu.thread, yMin, yMax, begin, drift );
@@ -68,9 +68,9 @@ bool View::DrawGpu( const TimelineContext& ctx, const GpuCtxData& gpu, int& offs
         }
         else
         {
-            if( tl.front()->GpuStart() >= 0 )
+            if( tl.front()->Start() >= 0 )
             {
-                const auto begin = tl.front()->GpuStart();
+                const auto begin = tl.front()->Start();
                 const auto drift = GpuDrift( &gpu );
                 if( !singleThread ) offset += sstep;
                 const auto partDepth = DispatchGpuZoneLevel( tl, hover, pxns, int64_t( nspx ), wpos, offset, 0, gpu.thread, yMin, yMax, begin, drift );
@@ -154,6 +154,7 @@ int View::DrawGpuZoneLevel( const V& vec, bool hover, double pxns, int64_t nspx,
     while( it < zitend )
     {
         auto& ev = a(*it);
+        auto& ex = m_worker.GetGpuExtra(ev);
         auto end = m_worker.GetZoneEndGPU( ev );
         if( end == std::numeric_limits<int64_t>::max() ) break;
         const auto start = AdjustGpuTime( ev.Start(), begin, drift );
@@ -202,7 +203,7 @@ int View::DrawGpuZoneLevel( const V& vec, bool hover, double pxns, int64_t nspx,
                 }
                 else
                 {
-                    const auto zoneThread = thread != 0 ? thread : m_worker.DecompressThread( ev.Thread() );
+                    const auto zoneThread = thread != 0 ? thread : m_worker.DecompressThread( ex.thread );
                     ZoneTooltipGPU( ev );
 
                     if( IsMouseClicked( 2 ) && rend - start > 0 )
@@ -215,8 +216,8 @@ int View::DrawGpuZoneLevel( const V& vec, bool hover, double pxns, int64_t nspx,
                     }
 
                     m_gpuThread = zoneThread;
-                    m_gpuStart = ev.CpuStart();
-                    m_gpuEnd = ev.CpuEnd();
+                    m_gpuStart = ex.otherStart.Val();
+                    m_gpuEnd = ex.otherEnd.Val();
                 }
             }
             const auto tmp = RealToString( num );
@@ -270,7 +271,7 @@ int View::DrawGpuZoneLevel( const V& vec, bool hover, double pxns, int64_t nspx,
                     DrawTextContrast( draw, wpos + ImVec2( std::max( std::max( 0., px0 ), std::min( double( w - tsz.x ), x ) ), offset ), 0xFFFFFFFF, zoneName );
                     ImGui::PopClipRect();
                 }
-                else if( ev.GpuStart() == ev.GpuEnd() )
+                else if( ev.Start() == ev.End() )
                 {
                     DrawTextContrast( draw, wpos + ImVec2( px0 + ( px1 - px0 - tsz.x ) * 0.5, offset ), 0xFFFFFFFF, zoneName );
                 }
@@ -288,7 +289,7 @@ int View::DrawGpuZoneLevel( const V& vec, bool hover, double pxns, int64_t nspx,
 
             if( hover && ImGui::IsMouseHoveringRect( wpos + ImVec2( px0, offset ), wpos + ImVec2( px1, offset + tsz.y + 1 ) ) )
             {
-                const auto zoneThread = thread != 0 ? thread : m_worker.DecompressThread( ev.Thread() );
+                const auto zoneThread = thread != 0 ? thread : m_worker.DecompressThread( ex.thread );
                 ZoneTooltipGPU( ev );
 
                 if( !m_zoomAnim.active && IsMouseClicked( 2 ) )
@@ -301,8 +302,8 @@ int View::DrawGpuZoneLevel( const V& vec, bool hover, double pxns, int64_t nspx,
                 }
 
                 m_gpuThread = zoneThread;
-                m_gpuStart = ev.CpuStart();
-                m_gpuEnd = ev.CpuEnd();
+                m_gpuStart = ex.otherStart.Val();
+                m_gpuEnd = ex.otherEnd.Val();
             }
 
             ++it;

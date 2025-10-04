@@ -164,7 +164,7 @@ void View::DrawOptions()
                                 auto& tl = *((Vector<ZoneEvent>*)&timeline);
                                 for( size_t j=tl.size()-1; j > 0; j-- )
                                 {
-                                    if( tl[j].GpuEnd() >= 0 )
+                                    if( tl[j].End() >= 0 )
                                     {
                                         lastidx = j;
                                         break;
@@ -175,7 +175,7 @@ void View::DrawOptions()
                             {
                                 for( size_t j=timeline.size()-1; j > 0; j-- )
                                 {
-                                    if( timeline[j]->GpuEnd() >= 0 )
+                                    if( timeline[j]->End() >= 0 )
                                     {
                                         lastidx = j;
                                         break;
@@ -198,10 +198,9 @@ void View::DrawOptions()
                                     const auto p1 = dist( gen );
                                     if( p0 != p1 )
                                     {
-                                        slopes[idx++] = float( 1.0 - double( tl[p1].GpuStart() - tl[p0].GpuStart() ) / double( tl[p1].CpuStart() - tl[p0].CpuStart() ) );
+                                        slopes[idx++] = float( 1.0 - double( tl[p1].Start() - tl[p0].Start() ) / double( m_worker.GetGpuExtra( tl[p1] ).otherStart.Val() - m_worker.GetGpuExtra( tl[p0] ).otherStart.Val() ) );
                                     }
-                                }
-                                while( idx < NumSlopes );
+                                } while( idx < NumSlopes );
                             }
                             else
                             {
@@ -211,10 +210,9 @@ void View::DrawOptions()
                                     const auto p1 = dist( gen );
                                     if( p0 != p1 )
                                     {
-                                        slopes[idx++] = float( 1.0 - double( timeline[p1]->GpuStart() - timeline[p0]->GpuStart() ) / double( timeline[p1]->CpuStart() - timeline[p0]->CpuStart() ) );
+                                        slopes[idx++] = float( 1.0 - double( timeline[p1]->Start() - timeline[p0]->Start() ) / double( m_worker.GetGpuExtra( *timeline[p1] ).otherStart.Val() - m_worker.GetGpuExtra( *timeline[p0] ).otherStart.Val() ) );
                                     }
-                                }
-                                while( idx < NumSlopes );
+                                } while( idx < NumSlopes );
                             }
                             pdqsort_branchless( slopes, slopes+NumSlopes );
                             drift = int( 1000000000 * -slopes[NumSlopes/2] );

@@ -232,13 +232,17 @@ struct ZoneExtra
     StringIdx text;
     StringIdx name;
     Int24 color;
-    Int48 otherStart;
-    Int48 otherEnd;
-    uint16_t query_id;
 };
 
 enum { ZoneExtraSize = sizeof( ZoneExtra ) };
 
+struct GpuExtra : public ZoneExtra
+{
+    uint16_t query_id;
+    uint16_t thread;
+    Int48 otherStart;
+    Int48 otherEnd;
+};
 
 // This union exploits the fact that the current implementations of x64 and arm64 do not provide
 // full 64 bit address space. The high bits must be bit-extended, so 0x80... is an invalid pointer.

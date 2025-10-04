@@ -488,7 +488,8 @@ uint64_t View::GetZoneThread( const ZoneEvent& zone ) const
 
 uint64_t View::GetZoneThreadGPU( const ZoneEvent& zone ) const
 {
-    if( zone.Thread() == 0 )
+    auto& ex = m_worker.GetGpuExtra(zone);
+    if( ex.thread == 0 )
     {
         for( const auto& ctx : m_worker.GetGpuData() )
         {
@@ -522,7 +523,7 @@ uint64_t View::GetZoneThreadGPU( const ZoneEvent& zone ) const
     }
     else
     {
-        return m_worker.DecompressThread( zone.Thread() );
+        return m_worker.DecompressThread( ex.thread );
     }
 }
 
