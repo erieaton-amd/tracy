@@ -421,6 +421,7 @@ struct GpuShim
     tracy_force_inline void SetChild( int32_t child ) { event.SetChild( child ); }
 
     tracy_force_inline operator short_ptr<event_type>() { return &event; }
+    tracy_force_inline operator event_type*() { return &event; }
     tracy_force_inline operator event_type&() { return event; }
     tracy_force_inline operator event_type&() const { return event; }
     tracy_force_inline GpuShim* operator->() { return this; }

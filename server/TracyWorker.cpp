@@ -5979,7 +5979,7 @@ void Worker::ProcessGpuTime( const QueueGpuTime& ev )
         if( timeSpan > 0 )
         {
             ZoneThreadData ztd;
-            ztd.SetZone( evt );
+            ztd.SetZone( zone );
             ztd.SetThread( zone->Thread() );
             auto slz = GetGpuSourceLocationZones( zone->SrcLoc() );
             slz->zones.push_back( ztd );
@@ -7817,7 +7817,7 @@ void Worker::ReadTimeline( FileRead& f, Vector<short_ptr<ZoneEvent>>& _vec, uint
     auto& vec = *(Vector<ZoneEvent>*)( &_vec );
     vec.set_magic();
     vec.reserve_exact( size, m_slab );
-    auto zone = vec.begin();
+    auto zonePtr = vec.begin();
     auto end = vec.end();
     do
     {
@@ -7825,25 +7825,25 @@ void Worker::ReadTimeline( FileRead& f, Vector<short_ptr<ZoneEvent>>& _vec, uint
         int16_t srcloc;
         uint16_t thread;
         uint64_t childSz;
-        auto& extra = AllocGpuExtra(*zone);
-        f.Read6( tcpu, tgpu, srcloc, extra.callstack, thread, childSz );
+        auto zone = GpuShim<false>(*zonePtr, AllocGpuExtra(*zonePtr));
+        f.Read6( tcpu, tgpu, srcloc, zone->callstack, thread, childSz );
         zone->SetSrcLoc( srcloc );
-        extra.thread = thread;
+        zone->SetThread(thread);
         refTime += tcpu;
         refGpuTime += tgpu;
-        extra.otherStart.SetVal( refTime );
-        zone->SetStart( refGpuTime );
+        zone->SetCpuStart( refTime );
+        zone->SetGpuStart( refGpuTime );
 
         ReadTimelineHaveSize( f, zone, refTime, refGpuTime, childIdx, childSz, hasQueryId );
 
         f.Read2( tcpu, tgpu );
         refTime += tcpu;
         refGpuTime += tgpu;
-        extra.otherEnd.SetVal( refTime );
-        zone->SetEnd( refGpuTime );
-        if( hasQueryId ) f.Read( extra.query_id );
+        zone->SetCpuEnd( refTime );
+        zone->SetGpuEnd( refGpuTime );
+        if( hasQueryId ) f.Read( zone->query_id );
     }
-    while( ++zone != end );
+    while( ++zonePtr != end );
 }
 
 void Worker::Disconnect()
