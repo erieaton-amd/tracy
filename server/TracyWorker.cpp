@@ -5823,10 +5823,10 @@ void Worker::ProcessGpuZoneBeginImplCommon( ZoneEvent* zone, const QueueGpuZoneB
         auto back = stack.back();
         if( back->Child() < 0 )
         {
-            back->SetChild( int32_t( m_data.zoneChildren.size() ) );
-            m_data.zoneChildren.push_back( Vector<short_ptr<ZoneEvent>>() );
+            back->SetChild( int32_t( m_data.gpuChildren.size() ) );
+            m_data.gpuChildren.push_back( Vector<short_ptr<ZoneEvent>>() );
         }
-        timeline = &m_data.zoneChildren[back->Child()];
+        timeline = &m_data.gpuChildren[back->Child()];
     }
 
     timeline->push_back( zone );
