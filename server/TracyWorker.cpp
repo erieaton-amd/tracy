@@ -7828,7 +7828,7 @@ void Worker::ReadTimeline( FileRead& f, Vector<short_ptr<ZoneEvent>>& _vec, uint
         auto zone = EventAdapter<false>(*zonePtr, AllocGpuExtra(*zonePtr));
         f.Read6( tcpu, tgpu, srcloc, zone->callstack, thread, childSz );
         zone->SetSrcLoc( srcloc );
-        zone->SetThread(thread);
+        zone->SetThread( thread );
         refTime += tcpu;
         refGpuTime += tgpu;
         zone->SetCpuStart( refTime );
