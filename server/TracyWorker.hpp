@@ -605,7 +605,7 @@ public:
 
     tracy_force_inline const bool HasZoneExtra( const ZoneEvent& ev ) const { return ev.extra != 0; }
     tracy_force_inline const ZoneExtra& GetZoneExtra( const ZoneEvent& ev ) const { return m_data.zoneExtra[ev.extra]; }
-    tracy_force_inline const GpuShim<true> GetGpuExtra( const ZoneEvent& ev ) const { return { ev, m_data.gpuExtra[ev.extra] }; }
+    tracy_force_inline const EventAdapter<true> GetGpuExtra( const ZoneEvent& ev ) const { return { ev, m_data.gpuExtra[ev.extra] }; }
 
     std::vector<int16_t> GetMatchingSourceLocation( const char* query, bool ignoreCase ) const;
 
@@ -789,10 +789,10 @@ private:
     tracy_force_inline void ProcessZoneBeginImpl( ZoneEvent* zone, const QueueZoneBegin& ev );
     tracy_force_inline void ProcessZoneBeginAllocSrcLocImpl( ZoneEvent* zone, const QueueZoneBeginLean& ev );
     tracy_force_inline GpuExtra& AllocGpuExtra( ZoneEvent& ev );
-    tracy_force_inline GpuShim<false> AllocGpuEvent();
-    tracy_force_inline void ProcessGpuZoneBeginImpl( GpuShim<false> zone, const QueueGpuZoneBegin& ev, bool serial );
-    tracy_force_inline void ProcessGpuZoneBeginAllocSrcLocImpl( GpuShim<false> zone, const QueueGpuZoneBeginLean& ev, bool serial );
-    tracy_force_inline void ProcessGpuZoneBeginImplCommon( GpuShim<false> zone, const QueueGpuZoneBeginLean& ev, bool serial );
+    tracy_force_inline EventAdapter<false> AllocGpuEvent();
+    tracy_force_inline void ProcessGpuZoneBeginImpl( EventAdapter<false> zone, const QueueGpuZoneBegin& ev, bool serial );
+    tracy_force_inline void ProcessGpuZoneBeginAllocSrcLocImpl( EventAdapter<false> zone, const QueueGpuZoneBeginLean& ev, bool serial );
+    tracy_force_inline void ProcessGpuZoneBeginImplCommon( EventAdapter<false> zone, const QueueGpuZoneBeginLean& ev, bool serial );
     tracy_force_inline void ProcessPlotDataImpl( uint64_t name, int64_t evTime, double val );
     tracy_force_inline MemEvent* ProcessMemAllocImpl( MemData& memdata, const QueueMemAlloc& ev );
     tracy_force_inline MemEvent* ProcessMemFreeImpl( MemData& memdata, const QueueMemFree& ev );
@@ -955,7 +955,7 @@ private:
 #endif
 
     tracy_force_inline ZoneExtra& GetZoneExtraMutable( const ZoneEvent& ev ) { return m_data.zoneExtra[ev.extra]; }
-    tracy_force_inline GpuShim<false> GetGpuExtraMutable( ZoneEvent& ev ) { return {ev, m_data.gpuExtra[ev.extra]}; }
+    tracy_force_inline EventAdapter<false> GetGpuExtraMutable( ZoneEvent& ev ) { return {ev, m_data.gpuExtra[ev.extra]}; }
     tracy_force_inline ZoneExtra& AllocZoneExtra( ZoneEvent& ev );
     tracy_force_inline ZoneExtra& RequestZoneExtra( ZoneEvent& ev );
 

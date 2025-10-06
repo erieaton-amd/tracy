@@ -360,7 +360,7 @@ private:
     const ZoneEvent* GetZoneParentGPU( const ZoneEvent& zone ) const;
     const ThreadData* GetZoneThreadData( const ZoneEvent& zone ) const;
     uint64_t GetZoneThread( const ZoneEvent& zone ) const;
-    uint64_t GetZoneThreadGPU( const GpuShim<true>& zone ) const;
+    uint64_t GetZoneThreadGPU( const EventAdapter<true>& zone ) const;
     const GpuCtxData* GetZoneCtx( const ZoneEvent& zone ) const;
     bool FindMatchingZone( int prev0, int prev1, int flags );
     const ZoneEvent* FindZoneAtTime( uint64_t thread, int64_t time ) const;

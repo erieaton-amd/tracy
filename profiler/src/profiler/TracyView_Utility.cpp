@@ -486,7 +486,7 @@ uint64_t View::GetZoneThread( const ZoneEvent& zone ) const
     return threadData ? threadData->id : 0;
 }
 
-uint64_t View::GetZoneThreadGPU( const GpuShim<true>& zone ) const
+uint64_t View::GetZoneThreadGPU( const EventAdapter<true>& zone ) const
 {
     if( zone.Thread() == 0 )
     {

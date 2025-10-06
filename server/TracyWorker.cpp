@@ -5746,21 +5746,21 @@ GpuExtra& Worker::AllocGpuExtra( ZoneEvent& ev )
     return extra;
 }
 
-GpuShim<false> Worker::AllocGpuEvent()
+EventAdapter<false> Worker::AllocGpuEvent()
 {
     auto zone = AllocZoneEvent();
     auto& extra = AllocGpuExtra(*zone);
     return { *zone, extra };
 };
 
-void Worker::ProcessGpuZoneBeginImpl( GpuShim<false> zone, const QueueGpuZoneBegin& ev, bool serial )
+void Worker::ProcessGpuZoneBeginImpl( EventAdapter<false> zone, const QueueGpuZoneBegin& ev, bool serial )
 {
     CheckSourceLocation( ev.srcloc );
     zone->SetSrcLoc( ShrinkSourceLocation( ev.srcloc ) );
     ProcessGpuZoneBeginImplCommon( zone, ev, serial );
 }
 
-void Worker::ProcessGpuZoneBeginAllocSrcLocImpl( GpuShim<false> zone, const QueueGpuZoneBeginLean& ev, bool serial )
+void Worker::ProcessGpuZoneBeginAllocSrcLocImpl( EventAdapter<false> zone, const QueueGpuZoneBeginLean& ev, bool serial )
 {
     assert( m_pendingSourceLocationPayload != 0 );
     zone->SetSrcLoc( m_pendingSourceLocationPayload );
@@ -5768,7 +5768,7 @@ void Worker::ProcessGpuZoneBeginAllocSrcLocImpl( GpuShim<false> zone, const Queu
     m_pendingSourceLocationPayload = 0;
 }
 
-void Worker::ProcessGpuZoneBeginImplCommon( GpuShim<false> zone, const QueueGpuZoneBeginLean& ev, bool serial )
+void Worker::ProcessGpuZoneBeginImplCommon( EventAdapter<false> zone, const QueueGpuZoneBeginLean& ev, bool serial )
 {
     m_data.gpuCnt++;
 
@@ -7825,7 +7825,7 @@ void Worker::ReadTimeline( FileRead& f, Vector<short_ptr<ZoneEvent>>& _vec, uint
         int16_t srcloc;
         uint16_t thread;
         uint64_t childSz;
-        auto zone = GpuShim<false>(*zonePtr, AllocGpuExtra(*zonePtr));
+        auto zone = EventAdapter<false>(*zonePtr, AllocGpuExtra(*zonePtr));
         f.Read6( tcpu, tgpu, srcloc, zone->callstack, thread, childSz );
         zone->SetSrcLoc( srcloc );
         zone->SetThread(thread);

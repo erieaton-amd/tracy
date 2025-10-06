@@ -396,13 +396,15 @@ struct LockHighlight
     bool blocked;
 };
 
-// for syntactical convenience, not for bulk data structures.
+// Makes a ZoneEvent and GpuExtra look like the old GpuEvent, for syntactical convenience. Not for
+// bulk data structures. Template parameter `is_const` makes the members const (otherwise the
+// adapter can't be constructed from const references).
 template<bool is_const>
-struct GpuShim
+struct EventAdapter
 {
     using event_type = std::conditional<is_const, const ZoneEvent, ZoneEvent>::type;
     using extra_type = std::conditional<is_const, const GpuExtra, GpuExtra>::type;
-    tracy_force_inline GpuShim( event_type& ev, extra_type& ex ) : event( ev ) , extra( ex ) , thread( ex.thread ) , callstack( ex.callstack ) , query_id( ex.query_id ) {}
+    tracy_force_inline EventAdapter( event_type& ev, extra_type& ex ) : event( ev ) , extra( ex ) , thread( ex.thread ) , callstack( ex.callstack ) , query_id( ex.query_id ) {}
 
     // GpuEvent compatibility functions
     tracy_force_inline int64_t CpuStart() const { return extra.otherStart.Val(); }
@@ -424,7 +426,7 @@ struct GpuShim
     tracy_force_inline operator event_type*() { return &event; }
     tracy_force_inline operator event_type&() { return event; }
     tracy_force_inline operator event_type&() const { return event; }
-    tracy_force_inline GpuShim* operator->() { return this; }
+    tracy_force_inline EventAdapter* operator->() { return this; }
     event_type& event;
     extra_type& extra;
     std::conditional<is_const, typename std::add_const<decltype( extra.thread )>::type&, decltype( extra.thread )&>::type thread;
