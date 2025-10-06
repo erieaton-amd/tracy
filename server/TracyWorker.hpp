@@ -789,10 +789,10 @@ private:
     tracy_force_inline void ProcessZoneBeginImpl( ZoneEvent* zone, const QueueZoneBegin& ev );
     tracy_force_inline void ProcessZoneBeginAllocSrcLocImpl( ZoneEvent* zone, const QueueZoneBeginLean& ev );
     tracy_force_inline GpuExtra& AllocGpuExtra( ZoneEvent& ev );
-    tracy_force_inline pair<ZoneEvent*, GpuExtra&> AllocGpuEvent();
-    tracy_force_inline void ProcessGpuZoneBeginImpl( ZoneEvent* zone, const QueueGpuZoneBegin& ev, bool serial );
-    tracy_force_inline void ProcessGpuZoneBeginAllocSrcLocImpl( ZoneEvent* zone, const QueueGpuZoneBeginLean& ev, bool serial );
-    tracy_force_inline void ProcessGpuZoneBeginImplCommon( ZoneEvent* zone, const QueueGpuZoneBeginLean& ev, bool serial );
+    tracy_force_inline GpuShim<false> AllocGpuEvent();
+    tracy_force_inline void ProcessGpuZoneBeginImpl( GpuShim<false> zone, const QueueGpuZoneBegin& ev, bool serial );
+    tracy_force_inline void ProcessGpuZoneBeginAllocSrcLocImpl( GpuShim<false> zone, const QueueGpuZoneBeginLean& ev, bool serial );
+    tracy_force_inline void ProcessGpuZoneBeginImplCommon( GpuShim<false> zone, const QueueGpuZoneBeginLean& ev, bool serial );
     tracy_force_inline void ProcessPlotDataImpl( uint64_t name, int64_t evTime, double val );
     tracy_force_inline MemEvent* ProcessMemAllocImpl( MemData& memdata, const QueueMemAlloc& ev );
     tracy_force_inline MemEvent* ProcessMemFreeImpl( MemData& memdata, const QueueMemFree& ev );

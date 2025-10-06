@@ -277,6 +277,10 @@ void View::DrawInfoWindow()
     {
         DrawZoneInfoWindow();
     }
+    else if( m_gpuInfoWindow )
+    {
+        DrawGpuInfoWindow();
+    }
 }
 
 void View::DrawZoneInfoWindow()
@@ -1517,7 +1521,7 @@ void View::DrawGpuInfoWindow()
         ImGui::Separator();
         ImGui::BeginChild( "##gpuinfo" );
 
-        const auto end = m_worker.GetZoneEnd( ev );
+        const auto end = m_worker.GetZoneEndGPU( ev );
         const auto ztime = end - ev.GpuStart();
         const auto selftime = GetZoneSelfTime( ev, true );
         TextFocused( "Time from start of program:", TimeToStringExact( ev.GpuStart() ) );
@@ -1596,7 +1600,7 @@ void View::DrawGpuInfoWindow()
             {
                 ImGui::SameLine();
             }
-            ImGui::TextDisabled( "(%s) %s", TimeToString( m_worker.GetZoneEnd( *v ) - v->Start() ), LocationToString( fileName, srcloc.line ) );
+            ImGui::TextDisabled( "(%s) %s", TimeToString( m_worker.GetZoneEndGPU( *v ) - v->Start() ), LocationToString( fileName, srcloc.line ) );
             ImGui::PopID();
             if( ImGui::IsItemClicked( 1 ) )
             {
@@ -1626,7 +1630,7 @@ void View::DrawGpuInfoWindow()
 
         if( ev.Child() >= 0 )
         {
-            const auto& children = m_worker.GetZoneChildren( ev.Child() );
+            const auto& children = m_worker.GetGpuChildren( ev.Child() );
             bool expand = ImGui::TreeNode( "Child zones" );
             ImGui::SameLine();
             ImGui::TextDisabled( "(%s)", RealToString( children.size() ) );
@@ -1679,7 +1683,7 @@ void View::DrawGpuInfoChildren( const V& children, int64_t ztime )
         for( size_t i=0; i<children.size(); i++ )
         {
             const auto& child = a(children[i]);
-            const auto cend = m_worker.GetZoneEnd( child );
+            const auto cend = m_worker.GetZoneEndGPU( child );
             const auto ct = cend - child.Start();
             const auto srcloc = child.SrcLoc();
             ctime += ct;
@@ -1771,7 +1775,7 @@ void View::DrawGpuInfoChildren( const V& children, int64_t ztime )
                 for( size_t i=0; i<cgr.v.size(); i++ )
                 {
                     const auto& child = a(children[cgr.v[i]]);
-                    const auto cend = m_worker.GetZoneEnd( child );
+                    const auto cend = m_worker.GetZoneEndGPU( child );
                     const auto ct = cend - child.Start();
                     ctt[i] = ct;
                     cti[i] = uint32_t( i );
@@ -1821,7 +1825,7 @@ void View::DrawGpuInfoChildren( const V& children, int64_t ztime )
         for( size_t i=0; i<children.size(); i++ )
         {
             const auto& child = a(children[i]);
-            const auto cend = m_worker.GetZoneEnd( child );
+            const auto cend = m_worker.GetZoneEndGPU( child );
             const auto ct = cend - child.Start();
             ctime += ct;
             ctt[i] = ct;
@@ -1982,7 +1986,7 @@ void View::ZoneTooltipGPU( const ZoneEvent& evt )
     const auto& ev = m_worker.GetGpuExtra(evt);
     const auto tid = GetZoneThreadGPU( ev );
     const auto& srcloc = m_worker.GetSourceLocation( ev.SrcLoc() );
-    const auto end = m_worker.GetZoneEnd( ev );
+    const auto end = m_worker.GetZoneEndGPU( ev );
     const auto ztime = end - ev.GpuStart();
     const auto selftime = GetZoneSelfTime( ev, true );
 

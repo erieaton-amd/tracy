@@ -202,7 +202,7 @@ int View::DrawGpuZoneLevel( const V& vec, bool hover, double pxns, int64_t nspx,
                 }
                 else
                 {
-                    const auto zoneThread = thread != 0 ? thread : m_worker.DecompressThread( ev.thread );
+                    const auto zoneThread = thread != 0 ? thread : m_worker.DecompressThread( ev.Thread() );
                     ZoneTooltipGPU( ev );
 
                     if( IsMouseClicked( 2 ) && rend - start > 0 )

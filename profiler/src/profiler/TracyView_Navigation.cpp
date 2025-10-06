@@ -21,8 +21,8 @@ void View::ZoomToZoneGPU( const ZoneEvent& ev )
     }
     else
     {
-        auto& ex = m_worker.GetGpuExtra(ev);
-        const auto td = ctx->threadData.size() == 1 ? ctx->threadData.begin() : ctx->threadData.find( m_worker.DecompressThread( ex.thread ) );
+        auto thread = m_worker.DecompressThread( m_worker.GetGpuExtra(ev).thread );
+        const auto td = ctx->threadData.size() == 1 ? ctx->threadData.begin() : ctx->threadData.find( thread );
         assert( td != ctx->threadData.end() );
         int64_t begin;
         if( td->second.timeline.is_magic() )

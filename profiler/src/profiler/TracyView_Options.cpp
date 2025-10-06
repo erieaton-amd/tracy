@@ -161,7 +161,7 @@ void View::DrawOptions()
                             size_t lastidx = 0;
                             if( timeline.is_magic() )
                             {
-                                auto& tl = *((Vector<ZoneEvent>*)&timeline);
+                                auto& tl = *( (Vector<ZoneEvent>*)&timeline );
                                 for( size_t j=tl.size()-1; j > 0; j-- )
                                 {
                                     if( tl[j].End() >= 0 )
@@ -191,7 +191,7 @@ void View::DrawOptions()
                             size_t idx = 0;
                             if( timeline.is_magic() )
                             {
-                                auto& tl = *((Vector<ZoneEvent>*)&timeline);
+                                auto& tl = *( (Vector<ZoneEvent>*)&timeline );
                                 do
                                 {
                                     const auto p0 = dist( gen );
@@ -200,7 +200,8 @@ void View::DrawOptions()
                                     {
                                         slopes[idx++] = float( 1.0 - double( tl[p1].Start() - tl[p0].Start() ) / double( m_worker.GetGpuExtra( tl[p1] ).CpuStart() - m_worker.GetGpuExtra( tl[p0] ).CpuStart() ) );
                                     }
-                                } while( idx < NumSlopes );
+                                }
+                                while( idx < NumSlopes );
                             }
                             else
                             {
@@ -212,7 +213,8 @@ void View::DrawOptions()
                                     {
                                         slopes[idx++] = float( 1.0 - double( timeline[p1]->Start() - timeline[p0]->Start() ) / double( m_worker.GetGpuExtra( *timeline[p1] ).CpuStart() - m_worker.GetGpuExtra( *timeline[p0] ).CpuStart() ) );
                                     }
-                                } while( idx < NumSlopes );
+                                }
+                                while( idx < NumSlopes );
                             }
                             pdqsort_branchless( slopes, slopes+NumSlopes );
                             drift = int( 1000000000 * -slopes[NumSlopes/2] );

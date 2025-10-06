@@ -141,13 +141,13 @@ View::ZoneColorData View::GetZoneColorData( const ZoneEvent& ev )
     ZoneColorData ret;
     const auto color = GetZoneColor( ev );
     ret.color = color;
-    if( m_zoneInfoWindow == &ev )
+    if( m_gpuInfoWindow == &ev )
     {
         ret.accentColor = 0xFF44DD44;
         ret.thickness = 3.f;
         ret.highlight = true;
     }
-    else if( m_zoneHighlight == &ev )
+    else if( m_gpuHighlight == &ev )
     {
         ret.accentColor = 0xFF4444FF;
         ret.thickness = 3.f;
@@ -486,10 +486,9 @@ uint64_t View::GetZoneThread( const ZoneEvent& zone ) const
     return threadData ? threadData->id : 0;
 }
 
-uint64_t View::GetZoneThreadGPU( const ZoneEvent& zone ) const
+uint64_t View::GetZoneThreadGPU( const GpuShim<true>& zone ) const
 {
-    auto& ex = m_worker.GetGpuExtra(zone);
-    if( ex.thread == 0 )
+    if( zone.Thread() == 0 )
     {
         for( const auto& ctx : m_worker.GetGpuData() )
         {
@@ -501,19 +500,19 @@ uint64_t View::GetZoneThreadGPU( const ZoneEvent& zone ) const
                 if( timeline->is_magic() )
                 {
                     auto vec = (Vector<ZoneEvent>*)timeline;
-                    auto it = std::upper_bound( vec->begin(), vec->end(), zone.Start(), [] ( const auto& l, const auto& r ) { return (uint64_t)l < (uint64_t)r.Start(); } );
+                    auto it = std::upper_bound( vec->begin(), vec->end(), zone.GpuStart(), [] ( const auto& l, const auto& r ) { return (uint64_t)l < (uint64_t)r.Start(); } );
                     if( it != vec->begin() ) --it;
-                    if( zone.End() >= 0 && it->Start() > zone.End() ) break;
-                    if( it == &zone ) return ctx->thread;
+                    if( zone.GpuEnd() >= 0 && it->Start() > zone.GpuEnd() ) break;
+                    if( it == &zone.event ) return ctx->thread;
                     if( it->Child() < 0 ) break;
                     timeline = &m_worker.GetGpuChildren( it->Child() );
                 }
                 else
                 {
-                    auto it = std::upper_bound( timeline->begin(), timeline->end(), zone.Start(), [] ( const auto& l, const auto& r ) { return (uint64_t)l < (uint64_t)r->Start(); } );
+                    auto it = std::upper_bound( timeline->begin(), timeline->end(), zone.GpuStart(), [] ( const auto& l, const auto& r ) { return (uint64_t)l < (uint64_t)r->Start(); } );
                     if( it != timeline->begin() ) --it;
-                    if( zone.End() >= 0 && (*it)->Start() > zone.End() ) break;
-                    if( *it == &zone ) return ctx->thread;
+                    if( zone.GpuEnd() >= 0 && (*it)->Start() > zone.GpuEnd() ) break;
+                    if( *it == &zone.event ) return ctx->thread;
                     if( (*it)->Child() < 0 ) break;
                     timeline = &m_worker.GetGpuChildren( (*it)->Child() );
                 }
@@ -523,7 +522,7 @@ uint64_t View::GetZoneThreadGPU( const ZoneEvent& zone ) const
     }
     else
     {
-        return m_worker.DecompressThread( ex.thread );
+        return m_worker.DecompressThread( zone.Thread() );
     }
 }
 

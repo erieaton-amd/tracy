@@ -402,7 +402,7 @@ struct GpuShim
 {
     using event_type = std::conditional<is_const, const ZoneEvent, ZoneEvent>::type;
     using extra_type = std::conditional<is_const, const GpuExtra, GpuExtra>::type;
-    GpuShim( event_type& ev, extra_type& ex ) : event( ev ) , extra( ex ) , thread( ex.thread ) , callstack( ex.callstack ) , query_id( ex.query_id ) {}
+    tracy_force_inline GpuShim( event_type& ev, extra_type& ex ) : event( ev ) , extra( ex ) , thread( ex.thread ) , callstack( ex.callstack ) , query_id( ex.query_id ) {}
 
     // GpuEvent compatibility functions
     tracy_force_inline int64_t CpuStart() const { return extra.otherStart.Val(); }
@@ -423,6 +423,7 @@ struct GpuShim
     tracy_force_inline operator short_ptr<event_type>() { return &event; }
     tracy_force_inline operator event_type&() { return event; }
     tracy_force_inline operator event_type&() const { return event; }
+    tracy_force_inline GpuShim* operator->() { return this; }
     event_type& event;
     extra_type& extra;
     std::conditional<is_const, typename std::add_const<decltype( extra.thread )>::type&, decltype( extra.thread )&>::type thread;
