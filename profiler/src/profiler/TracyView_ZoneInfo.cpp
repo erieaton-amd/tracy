@@ -1429,9 +1429,8 @@ void View::DrawZoneInfoChildren( const V& children, int64_t ztime )
 
 void View::DrawGpuInfoWindow()
 {
-    auto& ev = *m_gpuInfoWindow;
+    auto& ev = m_worker.GetGpuExtra(*m_gpuInfoWindow);
     const auto& srcloc = m_worker.GetSourceLocation( ev.SrcLoc() );
-    auto& ex = m_worker.GetGpuExtra(ev);
 
     const auto scale = GetScale();
     ImGui::SetNextWindowSize( ImVec2( 500 * scale, 600 * scale), ImGuiCond_FirstUseEver );
@@ -1452,17 +1451,17 @@ void View::DrawGpuInfoWindow()
                 ShowZoneInfo( *parent, m_gpuInfoWindowThread );
             }
         }
-        if( ex.callstack.Val() != 0 )
+        if( ev.callstack.Val() != 0 )
         {
             ImGui::SameLine();
-            bool hilite = m_callstackInfoWindow == ex.callstack.Val();
+            bool hilite = m_callstackInfoWindow == ev.callstack.Val();
             if( hilite )
             {
                 SetButtonHighlightColor();
             }
             if( ImGui::Button( ICON_FA_ALIGN_JUSTIFY " Call stack" ) )
             {
-                m_callstackInfoWindow = ex.callstack.Val();
+                m_callstackInfoWindow = ev.callstack.Val();
             }
             if( hilite )
             {
@@ -1519,9 +1518,9 @@ void View::DrawGpuInfoWindow()
         ImGui::BeginChild( "##gpuinfo" );
 
         const auto end = m_worker.GetZoneEnd( ev );
-        const auto ztime = end - ev.Start();
+        const auto ztime = end - ev.GpuStart();
         const auto selftime = GetZoneSelfTime( ev, true );
-        TextFocused( "Time from start of program:", TimeToStringExact( ev.Start() ) );
+        TextFocused( "Time from start of program:", TimeToStringExact( ev.GpuStart() ) );
         TextFocused( "GPU execution time:", TimeToString( ztime ) );
         TextFocused( "GPU self time:", TimeToString( selftime ) );
         if( ztime != 0 )
@@ -1531,15 +1530,15 @@ void View::DrawGpuInfoWindow()
             ImGui::SameLine();
             TextDisabledUnformatted( buf );
         }
-        TextFocused( "CPU command setup time:", TimeToString( ex.otherEnd.Val() - ex.otherStart.Val() ) );
+        TextFocused( "CPU command setup time:", TimeToString( ev.CpuEnd() - ev.CpuStart() ) );
         auto ctx = GetZoneCtx( ev );
         if( !ctx )
         {
-            TextFocused( "Delay to execution:", TimeToString( ev.Start() - ev.Start() ) );
+            TextFocused( "Delay to execution:", TimeToString( ev.GpuStart() - ev.CpuStart() ) );
         }
         else
         {
-            const auto td = ctx->threadData.size() == 1 ? ctx->threadData.begin() : ctx->threadData.find( m_worker.DecompressThread( ex.thread ) );
+            const auto td = ctx->threadData.size() == 1 ? ctx->threadData.begin() : ctx->threadData.find( m_worker.DecompressThread( ev.Thread() ) );
             assert( td != ctx->threadData.end() );
             int64_t begin;
             if( td->second.timeline.is_magic() )
@@ -1551,12 +1550,12 @@ void View::DrawGpuInfoWindow()
                 begin = td->second.timeline.front()->Start();
             }
             const auto drift = GpuDrift( ctx );
-            TextFocused( "Delay to execution:", TimeToString( AdjustGpuTime( ev.Start(), begin, drift ) - ex.otherStart.Val() ) );
+            TextFocused( "Delay to execution:", TimeToString( AdjustGpuTime( ev.GpuStart(), begin, drift ) - ev.CpuStart() ) );
         }
 
-        if( ctx->notes.contains( ex.query_id ) )
+        if( ctx->notes.contains( ev.query_id ) )
         {
-            for( auto& p : ctx->notes.at( ex.query_id ) )
+            for( auto& p : ctx->notes.at( ev.query_id ) )
             {
                 if( ctx->noteNames.count( p.first ) )
                 {
@@ -1578,7 +1577,7 @@ void View::DrawGpuInfoWindow()
             parent = GetZoneParentGPU( *parent );
         }
         int idx = 0;
-        DrawZoneTrace<const ZoneEvent*>( &ev, zoneTrace, m_worker, m_zoneinfoBuzzAnim, *this, m_showUnknownFrames, [&idx, this] ( const ZoneEvent* v, int& fidx ) {
+        DrawZoneTrace<const ZoneEvent*>( &ev.event, zoneTrace, m_worker, m_zoneinfoBuzzAnim, *this, m_showUnknownFrames, [&idx, this] ( const ZoneEvent* v, int& fidx ) {
             ImGui::TextDisabled( "%i.", fidx++ );
             ImGui::SameLine();
             const auto& srcloc = m_worker.GetSourceLocation( v->SrcLoc() );
@@ -1978,13 +1977,13 @@ void View::ZoneTooltip( const ZoneEvent& ev )
     ImGui::EndTooltip();
 }
 
-void View::ZoneTooltipGPU( const ZoneEvent& ev )
+void View::ZoneTooltipGPU( const ZoneEvent& evt )
 {
-    const auto& ex = m_worker.GetGpuExtra(ev);
+    const auto& ev = m_worker.GetGpuExtra(evt);
     const auto tid = GetZoneThreadGPU( ev );
     const auto& srcloc = m_worker.GetSourceLocation( ev.SrcLoc() );
     const auto end = m_worker.GetZoneEnd( ev );
-    const auto ztime = end - ev.Start();
+    const auto ztime = end - ev.GpuStart();
     const auto selftime = GetZoneSelfTime( ev, true );
 
     ImGui::BeginTooltip();
@@ -2014,15 +2013,15 @@ void View::ZoneTooltipGPU( const ZoneEvent& ev )
         ImGui::SameLine();
         TextDisabledUnformatted( buf );
     }
-    TextFocused( "CPU command setup time:", TimeToString( ex.otherEnd.Val() - ex.otherStart.Val() ) );
+    TextFocused( "CPU command setup time:", TimeToString( ev.CpuEnd() - ev.CpuStart() ) );
     auto ctx = GetZoneCtx( ev );
     if( !ctx )
     {
-        TextFocused( "Delay to execution:", TimeToString( ev.Start() - ex.otherStart.Val() ) );
+        TextFocused( "Delay to execution:", TimeToString( ev.GpuStart() - ev.CpuStart() ) );
     }
     else
     {
-        const auto td = ctx->threadData.size() == 1 ? ctx->threadData.begin() : ctx->threadData.find( m_worker.DecompressThread( ex.thread ) );
+        const auto td = ctx->threadData.size() == 1 ? ctx->threadData.begin() : ctx->threadData.find( m_worker.DecompressThread( ev.Thread() ) );
         assert( td != ctx->threadData.end() );
         int64_t begin;
         if( td->second.timeline.is_magic() )
@@ -2034,12 +2033,12 @@ void View::ZoneTooltipGPU( const ZoneEvent& ev )
             begin = td->second.timeline.front()->Start();
         }
         const auto drift = GpuDrift( ctx );
-        TextFocused( "Delay to execution:", TimeToString( AdjustGpuTime( ev.Start(), begin, drift ) - ex.otherStart.Val() ) );
+        TextFocused( "Delay to execution:", TimeToString( AdjustGpuTime( ev.GpuStart(), begin, drift ) - ev.CpuStart() ) );
     }
 
-    if( ctx->notes.contains( ex.query_id ) )
+    if( ctx->notes.contains( ev.query_id ) )
     {
-        for( auto& p : ctx->notes.at( ex.query_id ) )
+        for( auto& p : ctx->notes.at( ev.query_id ) )
         {
             if( ctx->noteNames.count( p.first ) )
             {

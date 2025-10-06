@@ -153,11 +153,10 @@ int View::DrawGpuZoneLevel( const V& vec, bool hover, double pxns, int64_t nspx,
 
     while( it < zitend )
     {
-        auto& ev = a(*it);
-        auto& ex = m_worker.GetGpuExtra(ev);
+        auto& ev = m_worker.GetGpuExtra(a(*it));
         auto end = m_worker.GetZoneEndGPU( ev );
         if( end == std::numeric_limits<int64_t>::max() ) break;
-        const auto start = AdjustGpuTime( ev.Start(), begin, drift );
+        const auto start = AdjustGpuTime( ev.GpuStart(), begin, drift );
         end = AdjustGpuTime( end, begin, drift );
         const auto zsz = std::max( ( end - start ) * pxns, pxns * 0.5 );
         if( zsz < MinVisSize )
@@ -203,7 +202,7 @@ int View::DrawGpuZoneLevel( const V& vec, bool hover, double pxns, int64_t nspx,
                 }
                 else
                 {
-                    const auto zoneThread = thread != 0 ? thread : m_worker.DecompressThread( ex.thread );
+                    const auto zoneThread = thread != 0 ? thread : m_worker.DecompressThread( ev.thread );
                     ZoneTooltipGPU( ev );
 
                     if( IsMouseClicked( 2 ) && rend - start > 0 )
@@ -216,8 +215,8 @@ int View::DrawGpuZoneLevel( const V& vec, bool hover, double pxns, int64_t nspx,
                     }
 
                     m_gpuThread = zoneThread;
-                    m_gpuStart = ex.otherStart.Val();
-                    m_gpuEnd = ex.otherEnd.Val();
+                    m_gpuStart = ev.CpuStart();
+                    m_gpuEnd = ev.CpuEnd();
                 }
             }
             const auto tmp = RealToString( num );
@@ -271,7 +270,7 @@ int View::DrawGpuZoneLevel( const V& vec, bool hover, double pxns, int64_t nspx,
                     DrawTextContrast( draw, wpos + ImVec2( std::max( std::max( 0., px0 ), std::min( double( w - tsz.x ), x ) ), offset ), 0xFFFFFFFF, zoneName );
                     ImGui::PopClipRect();
                 }
-                else if( ev.Start() == ev.End() )
+                else if( ev.GpuStart() == ev.GpuEnd() )
                 {
                     DrawTextContrast( draw, wpos + ImVec2( px0 + ( px1 - px0 - tsz.x ) * 0.5, offset ), 0xFFFFFFFF, zoneName );
                 }
@@ -289,7 +288,7 @@ int View::DrawGpuZoneLevel( const V& vec, bool hover, double pxns, int64_t nspx,
 
             if( hover && ImGui::IsMouseHoveringRect( wpos + ImVec2( px0, offset ), wpos + ImVec2( px1, offset + tsz.y + 1 ) ) )
             {
-                const auto zoneThread = thread != 0 ? thread : m_worker.DecompressThread( ex.thread );
+                const auto zoneThread = thread != 0 ? thread : m_worker.DecompressThread( ev.thread );
                 ZoneTooltipGPU( ev );
 
                 if( !m_zoomAnim.active && IsMouseClicked( 2 ) )
@@ -302,8 +301,8 @@ int View::DrawGpuZoneLevel( const V& vec, bool hover, double pxns, int64_t nspx,
                 }
 
                 m_gpuThread = zoneThread;
-                m_gpuStart = ex.otherStart.Val();
-                m_gpuEnd = ex.otherEnd.Val();
+                m_gpuStart = ev.CpuStart();
+                m_gpuEnd = ev.CpuEnd();
             }
 
             ++it;

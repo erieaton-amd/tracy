@@ -396,6 +396,40 @@ struct LockHighlight
     bool blocked;
 };
 
+// for syntactical convenience, not for bulk data structures.
+template<bool is_const>
+struct GpuShim
+{
+    using event_type = std::conditional<is_const, const ZoneEvent, ZoneEvent>::type;
+    using extra_type = std::conditional<is_const, const GpuExtra, GpuExtra>::type;
+    GpuShim( event_type& ev, extra_type& ex ) : event( ev ) , extra( ex ) , thread( ex.thread ) , callstack( ex.callstack ) , query_id( ex.query_id ) {}
+
+    // GpuEvent compatibility functions
+    tracy_force_inline int64_t CpuStart() const { return extra.otherStart.Val(); }
+    tracy_force_inline void SetCpuStart( int64_t cpuStart ) { assert( cpuStart < (int64_t)( 1ull << 47 ) ); extra.otherStart.SetVal( cpuStart ); }
+    tracy_force_inline int64_t CpuEnd() const { return extra.otherEnd.Val(); }
+    tracy_force_inline void SetCpuEnd( int64_t cpuEnd ) { assert( cpuEnd < (int64_t)( 1ull << 47 ) ); extra.otherEnd.SetVal( cpuEnd ); }
+    tracy_force_inline int64_t GpuStart() const { return event.Start(); }
+    tracy_force_inline void SetGpuStart( int64_t gpuStart ) { event.SetStart( gpuStart ); }
+    tracy_force_inline int64_t GpuEnd() const { return event.End(); }
+    tracy_force_inline void SetGpuEnd( int64_t gpuEnd ) { event.SetEnd( gpuEnd ); }
+    tracy_force_inline int16_t SrcLoc() const { return event.SrcLoc(); }
+    tracy_force_inline void SetSrcLoc( int16_t srcloc ) { event.SetSrcLoc( srcloc ); }
+    tracy_force_inline uint16_t Thread() const { return extra.thread; }
+    tracy_force_inline void SetThread( uint16_t thread ) { extra.thread = thread; }
+    tracy_force_inline int32_t Child() const { return event.Child(); }
+    tracy_force_inline void SetChild( int32_t child ) { event.SetChild( child ); }
+
+    tracy_force_inline operator short_ptr<event_type>() { return &event; }
+    tracy_force_inline operator event_type&() { return event; }
+    tracy_force_inline operator event_type&() const { return event; }
+    event_type& event;
+    extra_type& extra;
+    std::conditional<is_const, typename std::add_const<decltype( extra.thread )>::type&, decltype( extra.thread )&>::type thread;
+    std::conditional<is_const, typename std::add_const<decltype( extra.callstack )>::type&, decltype( extra.callstack )&>::type callstack;
+    std::conditional<is_const, typename std::add_const<decltype( extra.query_id )>::type&, decltype( extra.query_id )&>::type query_id;
+};
+
 struct MemEvent
 {
     tracy_force_inline uint64_t Ptr() const { return uint64_t( int64_t( _ptr_csalloc1 ) >> 8 ); }

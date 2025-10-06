@@ -5767,7 +5767,7 @@ void Worker::ProcessGpuZoneBeginAllocSrcLocImpl( ZoneEvent* zone, const QueueGpu
     m_pendingSourceLocationPayload = 0;
 }
 
-void Worker::ProcessGpuZoneBeginImplCommon( ZoneEvent* zone, const QueueGpuZoneBeginLean& ev, bool serial )
+void Worker::ProcessGpuZoneBeginImplCommon( ZoneEvent* evt, const QueueGpuZoneBeginLean& ev, bool serial )
 {
     m_data.gpuCnt++;
 
@@ -5783,29 +5783,29 @@ void Worker::ProcessGpuZoneBeginImplCommon( ZoneEvent* zone, const QueueGpuZoneB
     {
         cpuTime = RefTime( m_refTimeThread, ev.cpuTime );
     }
-    auto& zoneExtra = GetGpuExtraMutable(*zone);
+    auto zone = GetGpuExtraMutable(*evt);
 
     const auto time = TscTime( cpuTime );
-    zoneExtra.otherStart.SetVal( time );
-    zoneExtra.otherEnd.SetVal( -1 );
-    zone->SetStart( -1 );
-    zone->SetEnd( -1 );
-    zoneExtra.callstack.SetVal(0);
-    zone->SetChild( -1 );
-    zoneExtra.query_id = ev.queryId;
+    zone.SetCpuStart( time );
+    zone.SetCpuEnd( -1 );
+    zone.SetGpuStart( -1 );
+    zone.SetGpuEnd( -1 );
+    zone.callstack.SetVal(0);
+    zone.SetChild( -1 );
+    zone.extra.query_id = ev.queryId;
 
     uint64_t ztid;
     if( ctx->thread == 0 )
     {
         // Vulkan, OpenCL and Direct3D 12 contexts are not bound to any single thread.
-        zoneExtra.thread = CompressThread( ev.thread );
+        zone.thread = CompressThread( ev.thread );
         ztid = ev.thread;
     }
     else
     {
         // OpenGL and Direct3D11 doesn't need per-zone thread id. It still can be sent,
         // because it may be needed for callstack collection purposes.
-        zoneExtra.thread = 0;
+        zone.thread = 0;
         ztid = 0;
     }
 
@@ -5898,7 +5898,6 @@ void Worker::ProcessGpuZoneEnd( const QueueGpuZoneEnd& ev, bool serial )
 
     assert( !td->second.stack.empty() );
     auto zone = td->second.stack.back_and_pop();
-    auto& extra = GetGpuExtraMutable(*zone);
 
     assert( !ctx->query[ev.queryId] );
     ctx->query[ev.queryId] = zone;
@@ -5913,7 +5912,7 @@ void Worker::ProcessGpuZoneEnd( const QueueGpuZoneEnd& ev, bool serial )
         cpuTime = RefTime( m_refTimeThread, ev.cpuTime );
     }
     const auto time = TscTime( cpuTime );
-    extra.otherEnd.SetVal( time );
+    GetGpuExtraMutable(*zone).SetCpuEnd(time);
     if( m_data.lastTime < time ) m_data.lastTime = time;
 }
 
@@ -8569,14 +8568,13 @@ void Worker::WriteTimelineImpl( FileWrite& f, const V& vec, int64_t& refTime, in
     Adapter a;
     for( auto& val : vec )
     {
-        auto& v = a(val);
-        auto& ex = GetGpuExtra(v);
-        WriteTimeOffset( f, refTime, ex.otherStart.Val() );
-        WriteTimeOffset( f, refGpuTime, v.Start() );
+        auto& v = GetGpuExtra(a(val));
+        WriteTimeOffset( f, refTime, v.CpuStart() );
+        WriteTimeOffset( f, refGpuTime, v.GpuStart() );
         const int16_t srcloc = v.SrcLoc();
         f.Write( &srcloc, sizeof( srcloc ) );
-        f.Write( &ex.callstack, sizeof( ex.callstack ) );
-        const uint16_t thread = ex.thread;
+        f.Write( &v.callstack, sizeof( v.callstack ) );
+        const uint16_t thread = v.thread;
         f.Write( &thread, sizeof( thread ) );
 
         if( v.Child() < 0 )
@@ -8589,9 +8587,9 @@ void Worker::WriteTimelineImpl( FileWrite& f, const V& vec, int64_t& refTime, in
             WriteTimeline( f, GetGpuChildren( v.Child() ), refTime, refGpuTime );
         }
 
-        WriteTimeOffset( f, refTime, ex.otherEnd.Val() );
-        WriteTimeOffset( f, refGpuTime, v.End() );
-        f.Write( &ex.query_id, sizeof( ex.query_id ) );
+        WriteTimeOffset( f, refTime, v.CpuEnd() );
+        WriteTimeOffset( f, refGpuTime, v.GpuEnd() );
+        f.Write( &v.query_id, sizeof( v.query_id ) );
     }
 }
 

@@ -198,7 +198,7 @@ void View::DrawOptions()
                                     const auto p1 = dist( gen );
                                     if( p0 != p1 )
                                     {
-                                        slopes[idx++] = float( 1.0 - double( tl[p1].Start() - tl[p0].Start() ) / double( m_worker.GetGpuExtra( tl[p1] ).otherStart.Val() - m_worker.GetGpuExtra( tl[p0] ).otherStart.Val() ) );
+                                        slopes[idx++] = float( 1.0 - double( tl[p1].Start() - tl[p0].Start() ) / double( m_worker.GetGpuExtra( tl[p1] ).CpuStart() - m_worker.GetGpuExtra( tl[p0] ).CpuStart() ) );
                                     }
                                 } while( idx < NumSlopes );
                             }
@@ -210,7 +210,7 @@ void View::DrawOptions()
                                     const auto p1 = dist( gen );
                                     if( p0 != p1 )
                                     {
-                                        slopes[idx++] = float( 1.0 - double( timeline[p1]->Start() - timeline[p0]->Start() ) / double( m_worker.GetGpuExtra( *timeline[p1] ).otherStart.Val() - m_worker.GetGpuExtra( *timeline[p0] ).otherStart.Val() ) );
+                                        slopes[idx++] = float( 1.0 - double( timeline[p1]->Start() - timeline[p0]->Start() ) / double( m_worker.GetGpuExtra( *timeline[p1] ).CpuStart() - m_worker.GetGpuExtra( *timeline[p0] ).CpuStart() ) );
                                     }
                                 } while( idx < NumSlopes );
                             }

@@ -605,7 +605,7 @@ public:
 
     tracy_force_inline const bool HasZoneExtra( const ZoneEvent& ev ) const { return ev.extra != 0; }
     tracy_force_inline const ZoneExtra& GetZoneExtra( const ZoneEvent& ev ) const { return m_data.zoneExtra[ev.extra]; }
-    tracy_force_inline const GpuExtra& GetGpuExtra( const ZoneEvent& ev ) const { return m_data.gpuExtra[ev.extra]; }
+    tracy_force_inline const GpuShim<true> GetGpuExtra( const ZoneEvent& ev ) const { return { ev, m_data.gpuExtra[ev.extra] }; }
 
     std::vector<int16_t> GetMatchingSourceLocation( const char* query, bool ignoreCase ) const;
 
@@ -955,7 +955,7 @@ private:
 #endif
 
     tracy_force_inline ZoneExtra& GetZoneExtraMutable( const ZoneEvent& ev ) { return m_data.zoneExtra[ev.extra]; }
-    tracy_force_inline GpuExtra& GetGpuExtraMutable( const ZoneEvent& ev ) { return m_data.gpuExtra[ev.extra]; }
+    tracy_force_inline GpuShim<false> GetGpuExtraMutable( ZoneEvent& ev ) { return {ev, m_data.gpuExtra[ev.extra]}; }
     tracy_force_inline ZoneExtra& AllocZoneExtra( ZoneEvent& ev );
     tracy_force_inline ZoneExtra& RequestZoneExtra( ZoneEvent& ev );
 
